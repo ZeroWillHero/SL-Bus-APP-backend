@@ -56,4 +56,4 @@ pids
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 
 # Local API testing scripts
-/docs/
+/docs/*.py
