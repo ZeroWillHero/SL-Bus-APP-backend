@@ -53,7 +53,7 @@ export class ConductorService {
           licenseNumber: createConductorDto.licenseNumber,
           licenseExpiryDate: createConductorDto.licenseExpiryDate,
           licenseDoc: createConductorDto.licenseDoc,
-          
+
           contactNumber: createConductorDto.contactNumber,
           user: queryRunner.manager.create(User, { id: existUser.id }),
         });

@@ -18,10 +18,6 @@ export class UserService {
   async create(data: CreateUserDTO, manager?: EntityManager): Promise<UserDTO> {
     const repo = manager ? manager.getRepository(User) : this.userRepository;
 
-    const existingUser = await repo.findOne({
-      where: { email: data.email },
-    });
-
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
     const createdUser = await repo.save(
@@ -102,13 +98,12 @@ export class UserService {
     return this.convertToDTO(updatedUser);
   }
 
-  // find user BY Email or phone
+  // find user BY Email or phone — loads userRoles.role for JWT claims
   async findByEmailOrPhone(emailOrPhone: string): Promise<User | null> {
-    const user = await this.userRepository.findOne({
+    return this.userRepository.findOne({
       where: [{ email: emailOrPhone }, { phone: emailOrPhone }],
+      relations: ['userRoles', 'userRoles.role'],
     });
-
-    return user ? user : null;
   }
 
   // DELETE user by id
