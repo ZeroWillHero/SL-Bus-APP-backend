@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { DatabaseModule } from './features/databse/databse.module';
 import { UserModule } from './features/user/user.module';
 import { AuthModule } from './features/auth/auth.module';
@@ -8,6 +10,8 @@ import { RolesModule } from './features/roles/roles.module';
 import { UserRolesModule } from './features/user-roles/user-roles.module';
 import { CustomerModule } from './features/customer/customer.module';
 import { CacheModule } from './common/cache/cache.module';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 
 const envFilePath = process.env.NODE_ENV
   ? [
@@ -19,10 +23,8 @@ const envFilePath = process.env.NODE_ENV
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      envFilePath,
-    }),
+    ConfigModule.forRoot({ isGlobal: true, envFilePath }),
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     CacheModule,
     DatabaseModule,
     UserModule,
@@ -32,7 +34,10 @@ const envFilePath = process.env.NODE_ENV
     UserRolesModule,
     CustomerModule,
   ],
-  controllers: [],
-  providers: [],
+  providers: [
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
 })
 export class AppModule {}
