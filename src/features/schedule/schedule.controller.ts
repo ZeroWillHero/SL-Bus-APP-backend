@@ -20,24 +20,34 @@ import {
 } from '@nestjs/swagger';
 import { ScheduleService } from './schedule.service';
 import { BusOwnerService } from '../bus-owner/bus-owner.service';
+import {
+  TripAvailabilityDto,
+  TripAvailabilityService,
+} from '../trip-availability/trip-availability.service';
+import { ConductorService } from '../conductor/conductor.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { ScheduleDto } from './dto/schedule.dto';
+import { SetAvailabilityDto } from './dto/set-availability.dto';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 
 @ApiTags('Schedules')
 @ApiBearerAuth()
-@Roles('BusOwner')
 @Controller('api/v1/schedules')
 export class ScheduleController {
   constructor(
     private readonly scheduleService: ScheduleService,
     private readonly busOwnerService: BusOwnerService,
+    private readonly tripAvailabilityService: TripAvailabilityService,
+    private readonly conductorService: ConductorService,
   ) {}
 
+  // ─── BusOwner endpoints ──────────────────────────────────────────────────────
+
   @Post()
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'Create a schedule for an approved bus (BusOwner)' })
   @ApiCreatedResponse({ type: ScheduleDto })
   async create(
@@ -51,6 +61,7 @@ export class ScheduleController {
   }
 
   @Get()
+  @Roles('BusOwner')
   @ApiOperation({
     summary: 'List own schedules with optional filters (BusOwner)',
   })
@@ -77,6 +88,7 @@ export class ScheduleController {
   }
 
   @Get(':id')
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'Get schedule by ID (BusOwner)' })
   @ApiOkResponse({ type: ScheduleDto })
   async findOne(
@@ -90,6 +102,7 @@ export class ScheduleController {
   }
 
   @Patch(':id')
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'Update schedule fare/time/days (BusOwner)' })
   @ApiOkResponse({ type: ScheduleDto })
   async update(
@@ -104,6 +117,7 @@ export class ScheduleController {
   }
 
   @Delete(':id')
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'Deactivate a schedule (BusOwner)' })
   @ApiOkResponse({ type: ScheduleDto })
   async deactivate(
@@ -114,5 +128,31 @@ export class ScheduleController {
     const owner = await this.busOwnerService.findByUserId(user.userId);
     const result = await this.scheduleService.deactivate(id, owner.id);
     return new ResponseDTO(true, 'Schedule deactivated successfully', result);
+  }
+
+  // ─── Conductor endpoint ───────────────────────────────────────────────────────
+
+  @Patch(':id/trips/:date/availability')
+  @Roles('Conductor')
+  @ApiOperation({
+    summary: 'Toggle trip availability for a specific date (Conductor)',
+  })
+  @ApiOkResponse({ type: TripAvailabilityDto })
+  async setAvailability(
+    @Req() req: Request,
+    @Param('id') scheduleId: string,
+    @Param('date') date: string,
+    @Body() dto: SetAvailabilityDto,
+  ): Promise<ResponseDTO<TripAvailabilityDto>> {
+    const user = req.user as AuthenticatedUser;
+    const conductor = await this.conductorService.findByUserId(user.userId);
+    const result = await this.tripAvailabilityService.toggle(
+      scheduleId,
+      date,
+      dto.isAvailable,
+      conductor.id,
+      user.userId,
+    );
+    return new ResponseDTO(true, 'Trip availability updated', result);
   }
 }
