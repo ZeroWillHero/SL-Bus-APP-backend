@@ -9,6 +9,8 @@ import { ConductorModule } from './features/conductor/conductor.module';
 import { RolesModule } from './features/roles/roles.module';
 import { UserRolesModule } from './features/user-roles/user-roles.module';
 import { CustomerModule } from './features/customer/customer.module';
+import { BusOwnerModule } from './features/bus-owner/bus-owner.module';
+import { AdminModule } from './features/admin/admin.module';
 import { CacheModule } from './common/cache/cache.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -33,6 +35,8 @@ const envFilePath = process.env.NODE_ENV
     RolesModule,
     UserRolesModule,
     CustomerModule,
+    BusOwnerModule,
+    AdminModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },
