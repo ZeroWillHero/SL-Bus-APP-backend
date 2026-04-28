@@ -6,18 +6,32 @@ import {
   Patch,
   Param,
   Delete,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
 import { ConductorService } from './conductor.service';
+import { AssignmentService } from '../bus/assignment.service';
 import { CreateConductorDto } from './dto/create-conductor.dto';
 import { UpdateConductorDto } from './dto/update-conductor.dto';
-import { ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth,
+  ApiOkResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
 import { ConductorDTO } from './dto/conductor.dto';
+import { BusDto } from '../bus/dto/bus.dto';
+import { Roles } from '../../common/decorators/roles.decorator';
+import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 
 @Controller('api/v1/conductor')
 @ApiTags('Conductor')
 export class ConductorController {
-  constructor(private readonly conductorService: ConductorService) {}
+  constructor(
+    private readonly conductorService: ConductorService,
+    private readonly assignmentService: AssignmentService,
+  ) {}
 
   @Post()
   async create(
@@ -68,5 +82,23 @@ export class ConductorController {
   async remove(@Param('id') id: string): Promise<ResponseDTO<null>> {
     await this.conductorService.remove(id);
     return new ResponseDTO<null>(true, 'Conductor deleted successfully', null);
+  }
+
+  // ─── Conductor self-service ───────────────────────────────────────────────
+
+  @Get('me/buses')
+  @ApiBearerAuth()
+  @Roles('Conductor')
+  @ApiOperation({
+    summary: 'List buses assigned to the authenticated conductor',
+  })
+  @ApiOkResponse({ type: [BusDto] })
+  async myBuses(@Req() req: Request): Promise<ResponseDTO<BusDto[]>> {
+    const user = req.user as AuthenticatedUser;
+    const conductor = await this.conductorService.findByUserId(user.userId);
+    const result = await this.assignmentService.listBusesByConductor(
+      conductor.id,
+    );
+    return new ResponseDTO(true, 'Assigned buses fetched successfully', result);
   }
 }

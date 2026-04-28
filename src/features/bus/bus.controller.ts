@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -11,6 +14,7 @@ import {
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiQuery,
@@ -18,11 +22,13 @@ import {
 } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { BusService } from './bus.service';
+import { AssignmentService } from './assignment.service';
 import { CreateBusDto } from './dto/create-bus.dto';
 import { UpdateBusDto } from './dto/update-bus.dto';
 import { BusDto } from './dto/bus.dto';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { BusDocumentDto } from './dto/bus-document.dto';
+import { BusAssignmentDto } from './dto/bus-assignment.dto';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ApprovalStatus } from './enums/approval-status.enum';
@@ -37,6 +43,7 @@ export class BusController {
   constructor(
     private readonly busService: BusService,
     private readonly busOwnerService: BusOwnerService,
+    private readonly assignmentService: AssignmentService,
   ) {}
 
   @Post()
@@ -134,5 +141,54 @@ export class BusController {
     const owner = await this.busOwnerService.findByUserId(user.userId);
     const result = await this.busService.getDocument(id, owner.id, docId);
     return new ResponseDTO(true, 'Document fetched successfully', result);
+  }
+
+  // ─── Conductor Assignments ───────────────────────────────────────────────────
+
+  @Get(':id/conductors')
+  @ApiOperation({
+    summary: 'List active conductors assigned to a bus (BusOwner)',
+  })
+  @ApiOkResponse({ type: [BusAssignmentDto] })
+  async listConductors(
+    @Req() req: Request,
+    @Param('id') id: string,
+  ): Promise<ResponseDTO<BusAssignmentDto[]>> {
+    const user = req.user as AuthenticatedUser;
+    const owner = await this.busOwnerService.findByUserId(user.userId);
+    const result = await this.assignmentService.listConductors(id, owner.id);
+    return new ResponseDTO(true, 'Conductors fetched successfully', result);
+  }
+
+  @Post(':id/conductors/:conductorId')
+  @ApiOperation({ summary: 'Assign a conductor to a bus (BusOwner)' })
+  @ApiCreatedResponse({ type: BusAssignmentDto })
+  async assignConductor(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Param('conductorId') conductorId: string,
+  ): Promise<ResponseDTO<BusAssignmentDto>> {
+    const user = req.user as AuthenticatedUser;
+    const owner = await this.busOwnerService.findByUserId(user.userId);
+    const result = await this.assignmentService.assign(
+      id,
+      conductorId,
+      owner.id,
+    );
+    return new ResponseDTO(true, 'Conductor assigned successfully', result);
+  }
+
+  @Delete(':id/conductors/:conductorId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Unassign a conductor from a bus (BusOwner)' })
+  @ApiNoContentResponse({ description: 'Conductor unassigned' })
+  async unassignConductor(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Param('conductorId') conductorId: string,
+  ): Promise<void> {
+    const user = req.user as AuthenticatedUser;
+    const owner = await this.busOwnerService.findByUserId(user.userId);
+    await this.assignmentService.unassign(id, conductorId, owner.id);
   }
 }
