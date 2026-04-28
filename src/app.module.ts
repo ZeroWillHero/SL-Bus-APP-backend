@@ -10,6 +10,7 @@ import { RolesModule } from './features/roles/roles.module';
 import { UserRolesModule } from './features/user-roles/user-roles.module';
 import { CustomerModule } from './features/customer/customer.module';
 import { BusOwnerModule } from './features/bus-owner/bus-owner.module';
+import { BusModule } from './features/bus/bus.module';
 import { AdminModule } from './features/admin/admin.module';
 import { CacheModule } from './common/cache/cache.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
@@ -36,6 +37,7 @@ const envFilePath = process.env.NODE_ENV
     UserRolesModule,
     CustomerModule,
     BusOwnerModule,
+    BusModule,
     AdminModule,
   ],
   providers: [
