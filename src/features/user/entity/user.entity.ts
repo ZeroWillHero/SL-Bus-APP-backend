@@ -7,6 +7,7 @@ import {
 } from 'typeorm';
 import { Conductor } from '../../conductor/entities/conductor.entity';
 import { Customer } from '../../customer/entities/customer.entity';
+import { BusOwner } from '../../bus-owner/entities/bus-owner.entity';
 import { UserRole } from '../../user-roles/entities/user-role.entity';
 
 @Entity()
@@ -39,6 +40,9 @@ export class User {
 
   @OneToOne(() => Customer, (customer) => customer.user)
   customer?: Customer;
+
+  @OneToOne(() => BusOwner, (busOwner) => busOwner.user)
+  busOwner?: BusOwner;
 
   @OneToMany(() => UserRole, (userRole) => userRole.user)
   userRoles?: UserRole[];
