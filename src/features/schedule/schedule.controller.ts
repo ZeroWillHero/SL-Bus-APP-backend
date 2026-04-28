@@ -42,7 +42,7 @@ export class ScheduleController {
     private readonly busOwnerService: BusOwnerService,
     private readonly tripAvailabilityService: TripAvailabilityService,
     private readonly conductorService: ConductorService,
-  ) {}
+  ) { }
 
   // ─── BusOwner endpoints ──────────────────────────────────────────────────────
 
@@ -150,7 +150,7 @@ export class ScheduleController {
       scheduleId,
       date,
       dto.isAvailable,
-      conductor.id,
+      conductor.id!,
       user.userId,
     );
     return new ResponseDTO(true, 'Trip availability updated', result);

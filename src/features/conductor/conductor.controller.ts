@@ -96,8 +96,11 @@ export class ConductorController {
   async myBuses(@Req() req: Request): Promise<ResponseDTO<BusDto[]>> {
     const user = req.user as AuthenticatedUser;
     const conductor = await this.conductorService.findByUserId(user.userId);
+    if(!conductor) {
+      return new ResponseDTO<BusDto[]>(false, 'Conductor profile not found', []);
+    }
     const result = await this.assignmentService.listBusesByConductor(
-      conductor.id,
+    conductor.id!,
     );
     return new ResponseDTO(true, 'Assigned buses fetched successfully', result);
   }

@@ -30,6 +30,6 @@ export class BusDocument {
   @Column({ type: 'timestamp', nullable: true })
   verifiedAt!: Date | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'uuid', nullable: true })
   verifiedByAdminId!: string | null;
 }
