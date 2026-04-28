@@ -12,6 +12,9 @@ import { CustomerModule } from './features/customer/customer.module';
 import { BusOwnerModule } from './features/bus-owner/bus-owner.module';
 import { BusModule } from './features/bus/bus.module';
 import { AdminModule } from './features/admin/admin.module';
+import { RouteModule } from './features/route/route.module';
+import { ScheduleModule } from './features/schedule/schedule.module';
+import { SearchModule } from './features/search/search.module';
 import { CacheModule } from './common/cache/cache.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -39,6 +42,9 @@ const envFilePath = process.env.NODE_ENV
     BusOwnerModule,
     BusModule,
     AdminModule,
+    RouteModule,
+    ScheduleModule,
+    SearchModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

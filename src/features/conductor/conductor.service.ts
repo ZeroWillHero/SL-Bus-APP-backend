@@ -133,6 +133,15 @@ export class ConductorService {
     return this.convertToDTO(conductor);
   }
 
+  async findByUserId(userId: string): Promise<ConductorDTO> {
+    const conductor = await this.conductorRepository.findOne({
+      where: { user: { id: userId } },
+      relations: ['user'],
+    });
+    if (!conductor) throw new AppError('Conductor profile not found', 404);
+    return this.convertToDTO(conductor);
+  }
+
   async update(
     id: string,
     updateConductorDto: UpdateConductorDto,
