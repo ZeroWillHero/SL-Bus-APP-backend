@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Schedule } from '../schedule/entities/schedule.entity';
 import { SearchResultDto, SearchPageDto } from './dto/search-result.dto';
 import { ApprovalStatus } from '../bus/enums/approval-status.enum';
+import { BookingService } from '../booking/booking.service';
 
 const DAY_BITS = [
   1 << 0, // 0 = Sunday
@@ -28,6 +29,7 @@ export class SearchService {
   constructor(
     @InjectRepository(Schedule)
     private readonly scheduleRepo: Repository<Schedule>,
+    private readonly bookingService: BookingService,
   ) {}
 
   async findBuses(
@@ -80,30 +82,36 @@ export class SearchService {
       .take(limit)
       .getMany();
 
-    const data: SearchResultDto[] = schedules.map((s) => {
-      const departureHHMM = String(s.departureTime).substring(0, 5);
-      return {
-        scheduleId: s.id,
-        busId: s.bus.id,
-        registrationNumber: s.bus.registrationNumber,
-        busModel: s.bus.model,
-        operatorName: `${s.bus.owner.firstName} ${s.bus.owner.lastName}`,
-        origin: s.route.origin,
-        destination: s.route.destination,
-        viaStops: s.route.viaStops,
-        distanceKm: Number(s.route.distanceKm),
-        estimatedDurationMin: s.route.estimatedDurationMin,
-        departureTime: departureHHMM,
-        estimatedArrival: addMinutes(
-          departureHHMM,
-          s.route.estimatedDurationMin,
-        ),
-        baseFare: Number(s.baseFare),
-        totalSeats: s.bus.totalSeats,
-        availableSeats: s.bus.totalSeats,
-        operatingDays: s.operatingDays,
-      };
-    });
+    const data: SearchResultDto[] = await Promise.all(
+      schedules.map(async (s) => {
+        const departureHHMM = String(s.departureTime).substring(0, 5);
+        const confirmedSeats = await this.bookingService.countConfirmedSeats(
+          s.id,
+          date,
+        );
+        return {
+          scheduleId: s.id,
+          busId: s.bus.id,
+          registrationNumber: s.bus.registrationNumber,
+          busModel: s.bus.model,
+          operatorName: `${s.bus.owner.firstName} ${s.bus.owner.lastName}`,
+          origin: s.route.origin,
+          destination: s.route.destination,
+          viaStops: s.route.viaStops,
+          distanceKm: Number(s.route.distanceKm),
+          estimatedDurationMin: s.route.estimatedDurationMin,
+          departureTime: departureHHMM,
+          estimatedArrival: addMinutes(
+            departureHHMM,
+            s.route.estimatedDurationMin,
+          ),
+          baseFare: Number(s.baseFare),
+          totalSeats: s.bus.totalSeats,
+          availableSeats: s.bus.totalSeats - confirmedSeats,
+          operatingDays: s.operatingDays,
+        };
+      }),
+    );
 
     return {
       data,

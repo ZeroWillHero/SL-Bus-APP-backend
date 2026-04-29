@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { SearchService } from './search.service';
 import { Schedule } from '../schedule/entities/schedule.entity';
 import { ApprovalStatus } from '../bus/enums/approval-status.enum';
+import { BookingService } from '../booking/booking.service';
 
 const mockOwner = {
   id: 'owner-uuid',
@@ -58,14 +59,17 @@ const makeQb = (count: number, items: unknown[]) => {
 describe('SearchService', () => {
   let service: SearchService;
   let scheduleRepo: { createQueryBuilder: jest.Mock };
+  let bookingService: { countConfirmedSeats: jest.Mock };
 
   beforeEach(async () => {
     scheduleRepo = { createQueryBuilder: jest.fn() };
+    bookingService = { countConfirmedSeats: jest.fn().mockResolvedValue(0) };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SearchService,
         { provide: getRepositoryToken(Schedule), useValue: scheduleRepo },
+        { provide: BookingService, useValue: bookingService },
       ],
     }).compile();
 
