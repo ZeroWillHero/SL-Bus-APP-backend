@@ -134,6 +134,16 @@ export class CustomerService {
     return this.convertToDTO(updatedCustomer);
   }
 
+  async findByUserId(userId: string): Promise<Customer> {
+    const customer = await this.customerRepository.findOne({
+      where: { user: { id: userId } },
+      relations: ['user'],
+    });
+    if (!customer)
+      throw new AppError('Customer not found', HttpStatus.NOT_FOUND);
+    return customer;
+  }
+
   async remove(id: string): Promise<void> {
     const existingCustomer = await this.customerRepository.findOne({
       where: { id },
