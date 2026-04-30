@@ -9,4 +9,7 @@ export class CreateBookingDto {
 
   @ApiProperty({ example: ['A1', 'A2'], type: [String] })
   seatNumbers!: string[];
+
+  @ApiProperty({ required: false, nullable: true, example: 'SUMMER20', description: 'Optional coupon code for a discount' })
+  couponCode?: string;
 }

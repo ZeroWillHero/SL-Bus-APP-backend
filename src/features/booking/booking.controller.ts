@@ -10,9 +10,11 @@ import {
 } from '@nestjs/swagger';
 import { BookingService } from './booking.service';
 import { CustomerService } from '../customer/customer.service';
+import { CouponService } from '../coupon/coupon.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { BookingDto, SeatMapDto } from './dto/booking.dto';
 import { TicketDto } from './dto/ticket.dto';
+import { CouponValidationDto } from '../coupon/dto/coupon.dto';
 import { BookingStatus } from './enums/booking-status.enum';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -25,6 +27,7 @@ export class BookingController {
   constructor(
     private readonly bookingService: BookingService,
     private readonly customerService: CustomerService,
+    private readonly couponService: CouponService,
   ) {}
 
   // ─── Seat map (any authenticated user) ──────────────────────────────────────
@@ -108,6 +111,28 @@ export class BookingController {
     const customer = await this.customerService.findByUserId(user.userId);
     const result = await this.bookingService.getTicket(bookingId, customer.id);
     return new ResponseDTO(true, 'Ticket fetched successfully', result);
+  }
+
+  // ─── Coupon validation (Customer) ────────────────────────────────────────────
+
+  @Get('coupons/:code/validate')
+  @Roles('Customer')
+  @ApiOperation({ summary: 'Validate a coupon code and preview discount (Customer)' })
+  @ApiQuery({ name: 'fare', required: true, type: Number, description: 'Total fare before discount' })
+  @ApiOkResponse({ type: CouponValidationDto })
+  async validateCoupon(
+    @Req() req: Request,
+    @Param('code') code: string,
+    @Query('fare') fare: string,
+  ): Promise<ResponseDTO<CouponValidationDto>> {
+    const user = req.user as AuthenticatedUser;
+    const customer = await this.customerService.findByUserId(user.userId);
+    const result = await this.couponService.buildValidationDto(
+      code,
+      customer.id,
+      Number(fare),
+    );
+    return new ResponseDTO(true, 'Coupon is valid', result);
   }
 
   // ─── Conductor boarding endpoint ─────────────────────────────────────────────

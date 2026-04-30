@@ -9,7 +9,10 @@ import { Customer } from '../customer/entities/customer.entity';
 import { Conductor } from '../conductor/entities/conductor.entity';
 import { BusAssignment } from '../bus/entities/bus-assignment.entity';
 import { Payment } from '../payment/entities/payment.entity';
+import { Coupon } from '../coupon/entities/coupon.entity';
+import { CouponUsage } from '../coupon/entities/coupon-usage.entity';
 import { CustomerModule } from '../customer/customer.module';
+import { CouponModule } from '../coupon/coupon.module';
 
 @Module({
   imports: [
@@ -21,8 +24,11 @@ import { CustomerModule } from '../customer/customer.module';
       Conductor,
       BusAssignment,
       Payment,
+      Coupon,
+      CouponUsage,
     ]),
     CustomerModule,
+    CouponModule,
   ],
   controllers: [BookingController],
   providers: [BookingService],

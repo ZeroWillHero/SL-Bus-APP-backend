@@ -17,6 +17,7 @@ import { ScheduleModule } from './features/schedule/schedule.module';
 import { SearchModule } from './features/search/search.module';
 import { BookingModule } from './features/booking/booking.module';
 import { PaymentModule } from './features/payment/payment.module';
+import { CouponModule } from './features/coupon/coupon.module';
 import { CacheModule } from './common/cache/cache.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -49,6 +50,7 @@ const envFilePath = process.env.NODE_ENV
     SearchModule,
     BookingModule,
     PaymentModule,
+    CouponModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

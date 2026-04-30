@@ -8,6 +8,9 @@ import { Customer } from '../customer/entities/customer.entity';
 import { Conductor } from '../conductor/entities/conductor.entity';
 import { BusAssignment } from '../bus/entities/bus-assignment.entity';
 import { Payment } from '../payment/entities/payment.entity';
+import { Coupon } from '../coupon/entities/coupon.entity';
+import { CouponUsage } from '../coupon/entities/coupon-usage.entity';
+import { CouponService } from '../coupon/coupon.service';
 import { AppError } from '../../common/exceptions/app.exception';
 import { BookingStatus } from './enums/booking-status.enum';
 import { PaymentStatus } from '../payment/enums/payment-status.enum';
@@ -64,6 +67,11 @@ export class BookingService {
     private readonly assignmentRepo: Repository<BusAssignment>,
     @InjectRepository(Payment)
     private readonly paymentRepo: Repository<Payment>,
+    @InjectRepository(Coupon)
+    private readonly couponRepo: Repository<Coupon>,
+    @InjectRepository(CouponUsage)
+    private readonly couponUsageRepo: Repository<CouponUsage>,
+    private readonly couponService: CouponService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -172,6 +180,18 @@ export class BookingService {
 
     const totalFare = Number(schedule.baseFare) * dto.seatNumbers.length;
 
+    let discountAmount = 0;
+    let appliedCoupon: Coupon | null = null;
+    if (dto.couponCode) {
+      const result = await this.couponService.validateForCustomer(
+        dto.couponCode,
+        customerId,
+        totalFare,
+      );
+      appliedCoupon = result.coupon;
+      discountAmount = result.discountAmount;
+    }
+
     const qr = this.dataSource.createQueryRunner();
     await qr.connect();
     await qr.startTransaction();
@@ -182,6 +202,8 @@ export class BookingService {
         tripDate: dto.tripDate,
         seatNumbers: dto.seatNumbers,
         totalFare,
+        discountAmount,
+        coupon: appliedCoupon,
         status: BookingStatus.PENDING_PAYMENT,
       });
       const savedBooking = await qr.manager.save(booking);
@@ -195,6 +217,18 @@ export class BookingService {
         }),
       );
       await qr.manager.save(bookedSeats);
+
+      if (appliedCoupon) {
+        await qr.manager.save(
+          qr.manager.create(CouponUsage, {
+            coupon: appliedCoupon,
+            customer,
+            booking: savedBooking,
+            discountAmount,
+          }),
+        );
+        await qr.manager.increment(Coupon, { id: appliedCoupon.id }, 'usedCount', 1);
+      }
 
       await qr.commitTransaction();
       return this.toDto(savedBooking);
@@ -220,7 +254,7 @@ export class BookingService {
         customer: { id: customerId },
         status: In([BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED]),
       },
-      relations: ['customer', 'schedule'],
+      relations: ['customer', 'schedule', 'coupon'],
     });
     if (!booking)
       throw new AppError(
@@ -249,6 +283,10 @@ export class BookingService {
         });
       }
 
+      if (booking.coupon) {
+        await qr.manager.decrement(Coupon, { id: booking.coupon.id }, 'usedCount', 1);
+      }
+
       await qr.commitTransaction();
       booking.status = BookingStatus.CANCELLED;
       booking.cancelledAt = new Date();
@@ -268,6 +306,8 @@ export class BookingService {
     const qb = this.bookingRepo
       .createQueryBuilder('b')
       .innerJoin('b.customer', 'customer')
+      .leftJoin('b.coupon', 'coupon')
+      .addSelect('coupon.code')
       .where('customer.id = :customerId', { customerId })
       .orderBy('b.bookedAt', 'DESC');
 
@@ -294,6 +334,7 @@ export class BookingService {
         'schedule',
         'schedule.bus',
         'schedule.route',
+        'coupon',
       ],
     });
     if (!booking) {
@@ -315,6 +356,7 @@ export class BookingService {
     const bus = schedule.bus;
     const customer = booking.customer;
     const deptHHMM = String(schedule.departureTime).substring(0, 5);
+    const discountAmount = Number(booking.discountAmount);
 
     return {
       bookingId: booking.id,
@@ -331,6 +373,9 @@ export class BookingService {
       busModel: bus.model,
       seatNumbers: booking.seatNumbers,
       totalFare: Number(booking.totalFare),
+      discountAmount,
+      couponCode: booking.coupon?.code ?? null,
+      payableAmount: Number(booking.totalFare) - discountAmount,
       paymentMethod: payment.paymentMethod,
       paymentStatus: payment.status,
       paidAt: payment.paidAt,
@@ -348,7 +393,7 @@ export class BookingService {
 
     const booking = await this.bookingRepo.findOne({
       where: { id: bookingId, status: BookingStatus.CONFIRMED },
-      relations: ['schedule', 'schedule.bus', 'customer'],
+      relations: ['schedule', 'schedule.bus', 'customer', 'coupon'],
     });
     if (!booking) {
       throw new AppError(
@@ -391,6 +436,7 @@ export class BookingService {
   }
 
   toDto(booking: Booking): BookingDto {
+    const discountAmount = Number(booking.discountAmount ?? 0);
     return {
       id: booking.id,
       customerId: booking.customer?.id ?? '',
@@ -398,6 +444,9 @@ export class BookingService {
       tripDate: booking.tripDate,
       seatNumbers: booking.seatNumbers,
       totalFare: Number(booking.totalFare),
+      discountAmount,
+      payableAmount: Number(booking.totalFare) - discountAmount,
+      couponCode: booking.coupon?.code ?? null,
       status: booking.status,
       bookedAt: booking.bookedAt,
       cancelledAt: booking.cancelledAt,

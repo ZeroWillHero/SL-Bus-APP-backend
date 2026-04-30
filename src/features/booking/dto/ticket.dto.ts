@@ -46,6 +46,15 @@ export class TicketDto {
   @ApiProperty()
   totalFare!: number;
 
+  @ApiProperty()
+  discountAmount!: number;
+
+  @ApiProperty({ nullable: true })
+  couponCode!: string | null;
+
+  @ApiProperty()
+  payableAmount!: number;
+
   @ApiProperty({ enum: PaymentMethod })
   paymentMethod!: PaymentMethod;
 

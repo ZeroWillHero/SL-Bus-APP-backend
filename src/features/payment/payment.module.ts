@@ -4,11 +4,12 @@ import { PaymentService } from './payment.service';
 import { PaymentController } from './payment.controller';
 import { Payment } from './entities/payment.entity';
 import { Booking } from '../booking/entities/booking.entity';
+import { Customer } from '../customer/entities/customer.entity';
 import { CustomerModule } from '../customer/customer.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Payment, Booking]),
+    TypeOrmModule.forFeature([Payment, Booking, Customer]),
     CustomerModule,
   ],
   controllers: [PaymentController],
