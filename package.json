@@ -18,9 +18,10 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "typeorm": "TS_NODE_TRANSPILE_ONLY=true node -r ts-node/register -r tsconfig-paths/register ./node_modules/typeorm/cli-ts-node-commonjs.js -d src/database/typeorm.datasource.ts",
-    "migration:create": "npm run typeorm -- migration:create src/database/migrations/$npm_config_name",
-    "migration:generate": "npm run typeorm -- migration:generate src/database/migrations/$npm_config_name",
+    "migration:require-name": "node -e \"if(!process.env.npm_config_name){throw new Error('Missing --name=<MigrationName>')};\"",
+    "typeorm": "set TS_NODE_TRANSPILE_ONLY=true&& node -r ts-node/register -r tsconfig-paths/register ./node_modules/typeorm/cli-ts-node-commonjs.js -d src/database/typeorm.datasource.ts",
+    "migration:create": "npm run migration:require-name && npm run typeorm -- migration:create src/database/migrations/%npm_config_name%",
+    "migration:generate": "npm run migration:require-name && npm run typeorm -- migration:generate src/database/migrations/%npm_config_name%",
     "migration:run": "npm run typeorm -- migration:run",
     "migration:revert": "npm run typeorm -- migration:revert"
   },
