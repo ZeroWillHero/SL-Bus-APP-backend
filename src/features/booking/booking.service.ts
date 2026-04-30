@@ -1,13 +1,18 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { Booking } from './entities/booking.entity';
 import { BookedSeat } from './entities/booked-seat.entity';
 import { Schedule } from '../schedule/entities/schedule.entity';
 import { Customer } from '../customer/entities/customer.entity';
+import { Conductor } from '../conductor/entities/conductor.entity';
+import { BusAssignment } from '../bus/entities/bus-assignment.entity';
+import { Payment } from '../payment/entities/payment.entity';
 import { AppError } from '../../common/exceptions/app.exception';
 import { BookingStatus } from './enums/booking-status.enum';
+import { PaymentStatus } from '../payment/enums/payment-status.enum';
 import { BookingDto, SeatMapDto, SeatStatusDto } from './dto/booking.dto';
+import { TicketDto } from './dto/ticket.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 
 interface SeatDef {
@@ -34,6 +39,14 @@ function buildSeatDefs(layout: SeatLayout): SeatDef[] {
   return defs;
 }
 
+function addMinutes(time: string, minutes: number): string {
+  const [h, m] = time.split(':').map(Number);
+  const total = (h * 60 + m + minutes) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+}
+
+const TAKEN_STATUSES = [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.BOARDED];
+
 @Injectable()
 export class BookingService {
   constructor(
@@ -45,6 +58,12 @@ export class BookingService {
     private readonly scheduleRepo: Repository<Schedule>,
     @InjectRepository(Customer)
     private readonly customerRepo: Repository<Customer>,
+    @InjectRepository(Conductor)
+    private readonly conductorRepo: Repository<Conductor>,
+    @InjectRepository(BusAssignment)
+    private readonly assignmentRepo: Repository<BusAssignment>,
+    @InjectRepository(Payment)
+    private readonly paymentRepo: Repository<Payment>,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -80,7 +99,7 @@ export class BookingService {
             customer: { id: customer.id },
             schedule: { id: scheduleId },
             tripDate,
-            status: BookingStatus.CONFIRMED,
+            status: In(TAKEN_STATUSES),
           },
         });
         myBookingIds = new Set(myBookings.map((b) => b.id));
@@ -89,7 +108,7 @@ export class BookingService {
 
     const bookedMap = new Map<string, string>();
     for (const bs of takenSeats) {
-      if (bs.booking?.status === BookingStatus.CONFIRMED) {
+      if (bs.booking && TAKEN_STATUSES.includes(bs.booking.status)) {
         bookedMap.set(bs.seatNumber, bs.booking.id);
       }
     }
@@ -163,7 +182,7 @@ export class BookingService {
         tripDate: dto.tripDate,
         seatNumbers: dto.seatNumbers,
         totalFare,
-        status: BookingStatus.CONFIRMED,
+        status: BookingStatus.PENDING_PAYMENT,
       });
       const savedBooking = await qr.manager.save(booking);
 
@@ -199,7 +218,7 @@ export class BookingService {
       where: {
         id: bookingId,
         customer: { id: customerId },
-        status: BookingStatus.CONFIRMED,
+        status: In([BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED]),
       },
       relations: ['customer', 'schedule'],
     });
@@ -209,15 +228,37 @@ export class BookingService {
         HttpStatus.NOT_FOUND,
       );
 
-    booking.status = BookingStatus.CANCELLED;
-    booking.cancelledAt = new Date();
-    await this.bookingRepo.save(booking);
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      await qr.manager.update(Booking, bookingId, {
+        status: BookingStatus.CANCELLED,
+        cancelledAt: new Date(),
+      });
 
-    await this.bookedSeatRepo.delete({
-      booking: { id: bookingId },
-    });
+      await qr.manager.delete(BookedSeat, { booking: { id: bookingId } });
 
-    return this.toDto(booking);
+      const payment = await qr.manager.findOne(Payment, {
+        where: { booking: { id: bookingId }, status: PaymentStatus.COMPLETED },
+      });
+      if (payment) {
+        await qr.manager.update(Payment, payment.id, {
+          status: PaymentStatus.REFUNDED,
+          refundedAt: new Date(),
+        });
+      }
+
+      await qr.commitTransaction();
+      booking.status = BookingStatus.CANCELLED;
+      booking.cancelledAt = new Date();
+      return this.toDto(booking);
+    } catch (err) {
+      await qr.rollbackTransaction();
+      throw err;
+    } finally {
+      await qr.release();
+    }
   }
 
   async list(
@@ -241,6 +282,100 @@ export class BookingService {
     return bookings.map((b) => this.toDto(b));
   }
 
+  async getTicket(bookingId: string, customerId: string): Promise<TicketDto> {
+    const booking = await this.bookingRepo.findOne({
+      where: {
+        id: bookingId,
+        customer: { id: customerId },
+        status: In([BookingStatus.CONFIRMED, BookingStatus.BOARDED]),
+      },
+      relations: [
+        'customer',
+        'schedule',
+        'schedule.bus',
+        'schedule.route',
+      ],
+    });
+    if (!booking) {
+      throw new AppError(
+        'Ticket not found or booking not yet paid',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const payment = await this.paymentRepo.findOne({
+      where: { booking: { id: bookingId } },
+    });
+    if (!payment) {
+      throw new AppError('Payment record not found', HttpStatus.NOT_FOUND);
+    }
+
+    const schedule = booking.schedule;
+    const route = schedule.route;
+    const bus = schedule.bus;
+    const customer = booking.customer;
+    const deptHHMM = String(schedule.departureTime).substring(0, 5);
+
+    return {
+      bookingId: booking.id,
+      ticketRef: `TKT-${booking.id.substring(0, 8).toUpperCase()}`,
+      status: booking.status,
+      customerName: `${customer.firstName} ${customer.lastName}`,
+      origin: route.origin,
+      destination: route.destination,
+      viaStops: route.viaStops ?? [],
+      departureTime: deptHHMM,
+      tripDate: booking.tripDate,
+      estimatedArrival: addMinutes(deptHHMM, route.estimatedDurationMin),
+      busRegistration: bus.registrationNumber,
+      busModel: bus.model,
+      seatNumbers: booking.seatNumbers,
+      totalFare: Number(booking.totalFare),
+      paymentMethod: payment.paymentMethod,
+      paymentStatus: payment.status,
+      paidAt: payment.paidAt,
+      bookedAt: booking.bookedAt,
+    };
+  }
+
+  async board(bookingId: string, conductorUserId: string): Promise<BookingDto> {
+    const conductor = await this.conductorRepo.findOne({
+      where: { user: { id: conductorUserId } },
+    });
+    if (!conductor) {
+      throw new AppError('Conductor profile not found', HttpStatus.FORBIDDEN);
+    }
+
+    const booking = await this.bookingRepo.findOne({
+      where: { id: bookingId, status: BookingStatus.CONFIRMED },
+      relations: ['schedule', 'schedule.bus', 'customer'],
+    });
+    if (!booking) {
+      throw new AppError(
+        'Booking not found or not in CONFIRMED status',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const assignment = await this.assignmentRepo.findOne({
+      where: {
+        bus: { id: booking.schedule.bus.id },
+        conductor: { id: conductor.id },
+        isActive: true,
+      },
+    });
+    if (!assignment) {
+      throw new AppError(
+        'Conductor is not assigned to this bus',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
+    booking.status = BookingStatus.BOARDED;
+    const saved = await this.bookingRepo.save(booking);
+    return this.toDto(saved);
+  }
+
   async countConfirmedSeats(
     scheduleId: string,
     tripDate: string,
@@ -249,7 +384,7 @@ export class BookingService {
       where: {
         schedule: { id: scheduleId },
         tripDate,
-        booking: { status: BookingStatus.CONFIRMED },
+        booking: { status: In(TAKEN_STATUSES) },
       },
       relations: ['booking'],
     });

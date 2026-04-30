@@ -12,6 +12,7 @@ import { BookingService } from './booking.service';
 import { CustomerService } from '../customer/customer.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { BookingDto, SeatMapDto } from './dto/booking.dto';
+import { TicketDto } from './dto/ticket.dto';
 import { BookingStatus } from './enums/booking-status.enum';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -49,7 +50,7 @@ export class BookingController {
 
   @Post('bookings')
   @Roles('Customer')
-  @ApiOperation({ summary: 'Create a new booking (Customer)' })
+  @ApiOperation({ summary: 'Create a new booking (Customer) — status starts as PENDING_PAYMENT' })
   @ApiCreatedResponse({ type: BookingDto })
   async create(
     @Req() req: Request,
@@ -83,7 +84,7 @@ export class BookingController {
 
   @Post('bookings/:id/cancel')
   @Roles('Customer')
-  @ApiOperation({ summary: 'Cancel a booking (Customer)' })
+  @ApiOperation({ summary: 'Cancel a booking (Customer) — refunds payment if paid' })
   @ApiOkResponse({ type: BookingDto })
   async cancel(
     @Req() req: Request,
@@ -93,5 +94,34 @@ export class BookingController {
     const customer = await this.customerService.findByUserId(user.userId);
     const result = await this.bookingService.cancel(bookingId, customer.id);
     return new ResponseDTO(true, 'Booking cancelled successfully', result);
+  }
+
+  @Get('bookings/:id/ticket')
+  @Roles('Customer')
+  @ApiOperation({ summary: 'Get ticket for a confirmed booking (Customer)' })
+  @ApiOkResponse({ type: TicketDto })
+  async getTicket(
+    @Req() req: Request,
+    @Param('id') bookingId: string,
+  ): Promise<ResponseDTO<TicketDto>> {
+    const user = req.user as AuthenticatedUser;
+    const customer = await this.customerService.findByUserId(user.userId);
+    const result = await this.bookingService.getTicket(bookingId, customer.id);
+    return new ResponseDTO(true, 'Ticket fetched successfully', result);
+  }
+
+  // ─── Conductor boarding endpoint ─────────────────────────────────────────────
+
+  @Post('bookings/:id/board')
+  @Roles('Conductor')
+  @ApiOperation({ summary: 'Mark a passenger as boarded (Conductor)' })
+  @ApiOkResponse({ type: BookingDto })
+  async board(
+    @Req() req: Request,
+    @Param('id') bookingId: string,
+  ): Promise<ResponseDTO<BookingDto>> {
+    const user = req.user as AuthenticatedUser;
+    const result = await this.bookingService.board(bookingId, user.userId);
+    return new ResponseDTO(true, 'Passenger boarded successfully', result);
   }
 }
