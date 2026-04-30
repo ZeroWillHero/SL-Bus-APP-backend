@@ -9,6 +9,7 @@ import {
 } from 'typeorm';
 import { Customer } from '../../customer/entities/customer.entity';
 import { Schedule } from '../../schedule/entities/schedule.entity';
+import { Coupon } from '../../coupon/entities/coupon.entity';
 import { BookingStatus } from '../enums/booking-status.enum';
 import { BookedSeat } from './booked-seat.entity';
 
@@ -34,10 +35,17 @@ export class Booking {
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   totalFare!: number;
 
+  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  discountAmount!: number;
+
+  @ManyToOne(() => Coupon, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'couponId' })
+  coupon!: Coupon | null;
+
   @Column({
     type: 'enum',
     enum: BookingStatus,
-    default: BookingStatus.CONFIRMED,
+    default: BookingStatus.PENDING_PAYMENT,
   })
   status!: BookingStatus;
 
