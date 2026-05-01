@@ -74,15 +74,8 @@ jobs:
             mkdir -p ~/sl-bus-backend
             cd ~/sl-bus-backend
 
-            B64_SECRET='${{ secrets.PROD_ENV_FILE_BASE64 }}'
-            if [ -z "$B64_SECRET" ]; then
-              echo "Missing PROD_ENV_FILE_BASE64 secret."
-              exit 1
-            fi
-
-            CLEAN_B64="$(printf '%s' "$B64_SECRET" | tr -d '\r\n\t \"')"
-            if ! (printf '%s' "$CLEAN_B64" | base64 -d > .env 2>/dev/null || printf '%s' "$CLEAN_B64" | base64 --decode > .env 2>/dev/null); then
-              echo "PROD_ENV_FILE_BASE64 is invalid base64. Generate with: base64 < .env | tr -d '\\n'"
+            if [ ! -f .env ]; then
+              echo "Missing ~/sl-bus-backend/.env on server. Add it manually before deploy."
               exit 1
             fi
 

@@ -96,15 +96,8 @@ Add these repository secrets:
 - `SERVER_USER`
 - `SERVER_PASSWORD` (SSH password for `SERVER_USER`)
 - `SERVER_PORT` (optional, default `22`)
-- `PROD_ENV_FILE_BASE64` (recommended) or `PROD_ENV_FILE`
 
-Generate base64 env secret:
-
-```bash
-base64 -i .env | tr -d '\n'
-```
-
-Paste output into `PROD_ENV_FILE_BASE64`.
+Create `~/sl-bus-backend/.env` manually on the server before first deploy.
 
 ### 2. Server preparation (Ubuntu/Debian)
 
