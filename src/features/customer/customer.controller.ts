@@ -13,12 +13,14 @@ import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
 import { CustomerDTO } from './dto/customer.dto';
+import { Public } from '../../common/decorators/public.decorator';
 
 @Controller('api/v1/customer')
 @ApiTags('Customer')
 export class CustomerController {
-  constructor(private readonly customerService: CustomerService) {}
+  constructor(private readonly customerService: CustomerService) { }
 
+  @Public()
   @Post()
   @ApiOperation({ summary: 'Create a customer' })
   @ApiResponse({ status: 201, description: 'Customer created successfully' })

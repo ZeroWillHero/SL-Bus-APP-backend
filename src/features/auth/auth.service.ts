@@ -2,12 +2,13 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { UserService } from '../user/user.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from '../user/entity/user.entity';
-import { Repository } from 'typeorm';
+import { Auth, Repository } from 'typeorm';
 import { AuthRequestDTO } from './dto/authRequest.dto';
 import { AppError } from '../../common/exceptions/app.exception';
 import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import type { Response } from 'express';
+import { AuthRegisterDTO } from './dto/auth.register.dto';
 
 @Injectable()
 export class AuthService {
@@ -78,6 +79,27 @@ export class AuthService {
       maxAge: 0,
     });
     return null;
+  }
+
+  public async register (data: AuthRequestDTO, res: Response<AuthRegisterDTO>) {
+    const existingUser = await this.userRepo.findOne({
+      where: [
+        { email: data.username },
+        { phone: data.username }
+      ]
+    });
+
+    if(existingUser) {
+      throw new AppError('User with this email or phone already exists', HttpStatus.BAD_REQUEST);
+    }
+
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    const newUser = this.userRepo.create({
+      email: data.username,
+      password: hashedPassword,
+    });
+    const savedUser = await this.userRepo.save(newUser);
+    return this.userService.convertToDTO(savedUser);
   }
 
   private setRefreshCookie(res: Response, token: string) {

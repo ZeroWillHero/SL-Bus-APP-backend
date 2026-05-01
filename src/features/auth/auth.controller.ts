@@ -21,11 +21,12 @@ import { AuthService } from './auth.service';
 import { AuthRequestDTO } from './dto/authRequest.dto';
 import { AuthResponseDTO } from './dto/auth.response.dto';
 import { Public } from '../../common/decorators/public.decorator';
+import { AuthRegisterDTO } from './dto/auth.register.dto';
 
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(private readonly authService: AuthService) { }
 
   @Public()
   @Post('login')
@@ -67,5 +68,16 @@ export class AuthController {
   @ApiOkResponse({ description: 'Logged out successfully' })
   logout(@Res({ passthrough: true }) res: Response) {
     return this.authService.logout(res);
+  }
+
+  @Public()
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Register a new user' })
+  @ApiBody({ type: AuthRequestDTO })
+  @ApiOkResponse({ description: 'Registration successful', type: AuthRegisterDTO })
+  @ApiUnauthorizedResponse({ description: 'User already exists' })
+  async register(@Body() body: AuthRequestDTO, @Res({ passthrough: true }) res: Response) {
+    return this.authService.register(body, res);
   }
 }
