@@ -75,7 +75,11 @@ jobs:
             cd ~/sl-bus-backend
 
             if [ -n "${{ secrets.PROD_ENV_FILE_BASE64 }}" ]; then
-              printf '%s' "${{ secrets.PROD_ENV_FILE_BASE64 }}" | base64 --decode > .env
+              CLEAN_B64="$(printf '%s' "${{ secrets.PROD_ENV_FILE_BASE64 }}" | tr -d '\r\n\t ')"
+              if ! printf '%s' "$CLEAN_B64" | base64 -d > .env; then
+                echo "PROD_ENV_FILE_BASE64 is not valid base64. Re-generate with: base64 < .env | tr -d '\\n'"
+                exit 1
+              fi
             elif [ -n "${{ secrets.PROD_ENV_FILE }}" ]; then
               printf '%s' "${{ secrets.PROD_ENV_FILE }}" > .env
             else
@@ -83,7 +87,7 @@ jobs:
               exit 1
             fi
 
-            echo "DOCKER_IMAGE=${{ needs.build-and-push.outputs.image }}" > .deploy.env
+            echo "DOCKER_IMAGE=${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ github.sha }}" > .deploy.env
             docker login -u "${{ secrets.DOCKERHUB_USERNAME }}" -p "${{ secrets.DOCKERHUB_TOKEN }}"
             docker compose --env-file .deploy.env -f docker-compose.prod.yml pull
             docker compose --env-file .deploy.env -f docker-compose.prod.yml up -d
