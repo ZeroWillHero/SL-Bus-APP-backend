@@ -1,0 +1,24 @@
+services:
+  app:
+    image: ${DOCKER_IMAGE}
+    container_name: sl-bus-backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:${HOST_PORT:-3000}:3000"
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    container_name: sl-bus-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-6379}:6379"
+
+volumes:
+  redis-data:

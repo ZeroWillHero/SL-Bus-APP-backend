@@ -78,18 +78,71 @@ $ npm run test:e2e
 $ npm run test:cov
 ```
 
-## Deployment
+## Deployment (Docker Hub + GitHub Actions + VPS)
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+This repository includes:
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+- `Dockerfile` for production image build
+- `docker-compose.prod.yml` for running backend + Redis on the server
+- `.github/workflows/deployment.yml` for CI/CD (build, push, deploy)
+
+### 1. GitHub secrets
+
+Add these repository secrets:
+
+- `DOCKERHUB_USERNAME`
+- `DOCKERHUB_TOKEN` (Docker Hub access token)
+- `SERVER_HOST`
+- `SERVER_USER`
+- `SERVER_PASSWORD` (SSH password for `SERVER_USER`)
+- `SERVER_PORT` (optional, default `22`)
+- `PROD_ENV_FILE_BASE64` (recommended) or `PROD_ENV_FILE`
+
+Generate base64 env secret:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+base64 -i .env | tr -d '\n'
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Paste output into `PROD_ENV_FILE_BASE64`.
+
+### 2. Server preparation (Ubuntu/Debian)
+
+Install Docker and Compose plugin:
+
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker $USER
+```
+
+Reconnect SSH session after `usermod`.
+
+### 3. Cloudflare + reverse proxy
+
+1. Keep app private on VPS (`127.0.0.1:3000` is already configured).
+2. Put Nginx/Caddy on ports 80/443 and proxy to `http://127.0.0.1:3000`.
+3. Point your DNS record to VPS IP and enable Cloudflare proxy (orange cloud).
+4. In Cloudflare SSL/TLS mode, use **Full (strict)** with an origin cert on Nginx/Caddy.
+5. Enable Cloudflare WAF/rate-limiting rules as needed.
+
+### 4. Deploy
+
+Push to `main` (or run workflow manually). The workflow will:
+
+1. Build and push image to Docker Hub.
+2. SSH into server.
+3. Decode `PROD_ENV_FILE_BASE64` (or fallback to `PROD_ENV_FILE`) into `.env`.
+4. Pull latest image and restart stack with Docker Compose.
 
 ## Resources
 
