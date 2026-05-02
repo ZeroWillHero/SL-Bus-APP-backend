@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -8,7 +9,9 @@ import {
   Res,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiBody,
+  ApiBadRequestResponse,
   ApiCookieAuth,
   ApiOkResponse,
   ApiOperation,
@@ -22,6 +25,7 @@ import { AuthRequestDTO } from './dto/authRequest.dto';
 import { AuthResponseDTO } from './dto/auth.response.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { AuthRegisterDTO } from './dto/auth.register.dto';
+import { AuthenticatedUser } from './strategies/jwt.strategy';
 
 @ApiTags('Auth')
 @Controller('api/v1/auth')
@@ -77,8 +81,18 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new user' })
   @ApiBody({ type: AuthRequestDTO })
   @ApiOkResponse({ description: 'Registration successful', type: AuthRegisterDTO })
-  @ApiUnauthorizedResponse({ description: 'User already exists' })
+  @ApiBadRequestResponse({ description: 'User already exists' })
   async register(@Body() body: AuthRequestDTO, @Res({ passthrough: true }) res: Response) {
     return this.authService.register(body, res);
+  }
+
+  @Get('verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Verify the current access token and return the authenticated user' })
+  @ApiOkResponse({ description: 'Token is valid, returns current user' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  async verify(@Req() req: Request) {
+    return this.authService.verify(req.user as AuthenticatedUser);
   }
 }

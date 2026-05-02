@@ -2,13 +2,14 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { UserService } from '../user/user.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from '../user/entity/user.entity';
-import { Auth, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { AuthRequestDTO } from './dto/authRequest.dto';
 import { AppError } from '../../common/exceptions/app.exception';
 import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import type { Response } from 'express';
 import { AuthRegisterDTO } from './dto/auth.register.dto';
+import { AuthenticatedUser } from './strategies/jwt.strategy';
 
 @Injectable()
 export class AuthService {
@@ -85,14 +86,14 @@ export class AuthService {
 
   public async register(data: AuthRequestDTO, res: Response<AuthRegisterDTO>) {
     const existingUser = await this.userRepo.findOne({
-      where: [
-        { email: data.username },
-        { phone: data.username }
-      ]
+      where: [{ email: data.username }, { phone: data.username }],
     });
 
     if (existingUser) {
-      throw new AppError('User with this email or phone already exists', HttpStatus.BAD_REQUEST);
+      throw new AppError(
+        'User with this email or phone already exists',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
@@ -102,6 +103,19 @@ export class AuthService {
     });
     const savedUser = await this.userRepo.save(newUser);
     return this.userService.convertToDTO(savedUser);
+  }
+
+  public async verify(authUser: AuthenticatedUser) {
+    const user = await this.userRepo.findOne({
+      where: { id: authUser.userId },
+      relations: ['userRoles', 'userRoles.role'],
+    });
+
+    if (!user) {
+      throw new AppError('User not found', HttpStatus.UNAUTHORIZED);
+    }
+
+    return this.userService.convertToDTO(user);
   }
 
   private setRefreshCookie(res: Response, token: string) {
