@@ -21,17 +21,29 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
+  const apiVersion = process.env.npm_package_version ?? '1.0.0';
+  const localServerUrl =
+    process.env.SWAGGER_LOCAL_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+  const productionServerUrl =
+    process.env.SWAGGER_PROD_URL ?? 'https://api.codescapelabs.com';
+
   const config = new DocumentBuilder()
     .setTitle('SL BUS Swagger API')
     .setDescription('API documentation')
-    .setVersion('1.0')
+    .setVersion(apiVersion)
+    .addServer(localServerUrl, 'Local development')
+    .addServer(productionServerUrl, 'Production')
     .addBearerAuth() // 🔐 for JWT auth
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
   app.use(cookieParser());
 
-  SwaggerModule.setup('api/v1/swagger-ui', app, document);
+  SwaggerModule.setup('api/v1/swagger-ui', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  });
   app.useGlobalFilters(new GlobalHttpExceptionFilter());
   app.useGlobalInterceptors(
     new LoggingInterceptor(),
