@@ -35,12 +35,6 @@ export class User {
   })
   isVerified!: boolean;
 
-  @Column({ nullable: true, type: 'varchar' })
-  verificationCode!: string | null;
-
-  @Column({ nullable: true, type: 'timestamp' })
-  verificationCodeExpiry!: Date | null;
-
   @OneToOne(() => Conductor, (conductor) => conductor.user)
   conductor?: Conductor;
 

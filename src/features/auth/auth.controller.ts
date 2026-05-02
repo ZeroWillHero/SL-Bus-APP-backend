@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Post,
@@ -8,10 +9,10 @@ import {
   Res,
 } from '@nestjs/common';
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiBadRequestResponse,
   ApiCookieAuth,
-  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -24,7 +25,7 @@ import { AuthRequestDTO } from './dto/authRequest.dto';
 import { AuthResponseDTO } from './dto/auth.response.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { AuthRegisterDTO } from './dto/auth.register.dto';
-import { AuthVerifyDTO } from './dto/auth.verify.dto';
+import { AuthenticatedUser } from './strategies/jwt.strategy';
 
 @ApiTags('Auth')
 @Controller('api/v1/auth')
@@ -85,16 +86,13 @@ export class AuthController {
     return this.authService.register(body, res);
   }
 
-  @Public()
-  @Post('verify')
+  @Get('verify')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Verify user account using the OTP from registration' })
-  @ApiBody({ type: AuthVerifyDTO })
-  @ApiOkResponse({ description: 'Account verified successfully' })
-  @ApiBadRequestResponse({ description: 'Code expired or account already verified' })
-  @ApiUnauthorizedResponse({ description: 'Invalid verification code' })
-  @ApiNotFoundResponse({ description: 'User not found' })
-  async verify(@Body() body: AuthVerifyDTO) {
-    return this.authService.verify(body);
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Verify the current access token and return the authenticated user' })
+  @ApiOkResponse({ description: 'Token is valid, returns current user' })
+  @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
+  async verify(@Req() req: Request) {
+    return this.authService.verify(req.user as AuthenticatedUser);
   }
 }

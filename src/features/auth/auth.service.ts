@@ -9,7 +9,7 @@ import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import type { Response } from 'express';
 import { AuthRegisterDTO } from './dto/auth.register.dto';
-import { AuthVerifyDTO } from './dto/auth.verify.dto';
+import { AuthenticatedUser } from './strategies/jwt.strategy';
 
 @Injectable()
 export class AuthService {
@@ -97,59 +97,25 @@ export class AuthService {
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
-    const verificationCode = this.generateOtp();
-    const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
-
     const newUser = this.userRepo.create({
       email: data.username,
       password: hashedPassword,
-      verificationCode,
-      verificationCodeExpiry,
     });
     const savedUser = await this.userRepo.save(newUser);
-    return { user: this.userService.convertToDTO(savedUser), verificationCode };
+    return this.userService.convertToDTO(savedUser);
   }
 
-  public async verify(data: AuthVerifyDTO) {
+  public async verify(authUser: AuthenticatedUser) {
     const user = await this.userRepo.findOne({
-      where: [{ email: data.username }, { phone: data.username }],
+      where: { id: authUser.userId },
+      relations: ['userRoles', 'userRoles.role'],
     });
 
     if (!user) {
-      throw new AppError('User not found', HttpStatus.NOT_FOUND);
+      throw new AppError('User not found', HttpStatus.UNAUTHORIZED);
     }
 
-    if (user.isVerified) {
-      throw new AppError('Account is already verified', HttpStatus.BAD_REQUEST);
-    }
-
-    if (
-      !user.verificationCode ||
-      !user.verificationCodeExpiry ||
-      new Date() > user.verificationCodeExpiry
-    ) {
-      throw new AppError(
-        'Verification code has expired',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-
-    if (user.verificationCode !== data.code) {
-      throw new AppError(
-        'Invalid verification code',
-        HttpStatus.UNAUTHORIZED,
-      );
-    }
-
-    user.isVerified = true;
-    user.verificationCode = null;
-    user.verificationCodeExpiry = null;
-    const verified = await this.userRepo.save(user);
-    return this.userService.convertToDTO(verified);
-  }
-
-  private generateOtp(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return this.userService.convertToDTO(user);
   }
 
   private setRefreshCookie(res: Response, token: string) {
