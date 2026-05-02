@@ -7,7 +7,10 @@ import {
   Req,
   Res,
 } from '@nestjs/common';
+import { AuthenticatedUser } from './strategies/jwt.strategy';
+
 import {
+  ApiBearerAuth,
   ApiBody,
   ApiCookieAuth,
   ApiOkResponse,
@@ -22,6 +25,7 @@ import { AuthRequestDTO } from './dto/authRequest.dto';
 import { AuthResponseDTO } from './dto/auth.response.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { AuthRegisterDTO } from './dto/auth.register.dto';
+import { VerifyOtpDto, VerifyRequestResponseDto, VerifyResponseDto } from './dto/verify.dto';
 
 @ApiTags('Auth')
 @Controller('api/v1/auth')
@@ -80,5 +84,32 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'User already exists' })
   async register(@Body() body: AuthRequestDTO, @Res({ passthrough: true }) res: Response) {
     return this.authService.register(body, res);
+  }
+
+  @Post('verify/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Request a verification OTP (authenticated)',
+    description:
+      'Generates a 6-digit OTP valid for 15 minutes. ' +
+      'Any previously active OTP for this user is invalidated. ' +
+      'In production the OTP would be delivered by email/SMS; ' +
+      'it is returned in the response for development convenience.',
+  })
+  @ApiOkResponse({ type: VerifyRequestResponseDto })
+  async requestVerification(@Req() req: Request): Promise<VerifyRequestResponseDto> {
+    const user = req.user as AuthenticatedUser;
+    return this.authService.requestVerification(user.userId);
+  }
+
+  @Public()
+  @Post('verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify account with the OTP from /verify/request' })
+  @ApiBody({ type: VerifyOtpDto })
+  @ApiOkResponse({ type: VerifyResponseDto })
+  async verify(@Body() body: VerifyOtpDto): Promise<VerifyResponseDto> {
+    return this.authService.verifyAccount(body.token);
   }
 }
