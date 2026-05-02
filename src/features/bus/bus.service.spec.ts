@@ -4,6 +4,7 @@ import { BusService } from './bus.service';
 import { Bus } from './entities/bus.entity';
 import { BusDocument } from './entities/bus-document.entity';
 import { BusOwner } from '../bus-owner/entities/bus-owner.entity';
+import { BusOwnerService } from '../bus-owner/bus-owner.service';
 import { ApprovalStatus } from './enums/approval-status.enum';
 import { DocumentType } from './enums/document-type.enum';
 
@@ -49,6 +50,7 @@ describe('BusService', () => {
     save: jest.Mock;
   };
   let ownerRepo: { findOne: jest.Mock };
+  let busOwnerService: { convertToDto: jest.Mock };
 
   beforeEach(async () => {
     busRepo = {
@@ -64,6 +66,9 @@ describe('BusService', () => {
       save: jest.fn(),
     };
     ownerRepo = { findOne: jest.fn() };
+    busOwnerService = {
+      convertToDto: jest.fn((owner: BusOwner) => ({ id: owner.id }) as never),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -71,6 +76,7 @@ describe('BusService', () => {
         { provide: getRepositoryToken(Bus), useValue: busRepo },
         { provide: getRepositoryToken(BusDocument), useValue: docRepo },
         { provide: getRepositoryToken(BusOwner), useValue: ownerRepo },
+        { provide: BusOwnerService, useValue: busOwnerService },
       ],
     }).compile();
 
@@ -237,7 +243,7 @@ describe('BusService', () => {
     it('maps all fields correctly', () => {
       const dto = service.toDto(mockBus);
       expect(dto.id).toBe('bus-uuid');
-      expect(dto.ownerId).toBe('owner-uuid');
+      expect(dto.owner?.id).toBe('owner-uuid');
       expect(dto.approvalStatus).toBe(ApprovalStatus.PENDING);
     });
   });

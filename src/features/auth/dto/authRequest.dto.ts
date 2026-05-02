@@ -4,13 +4,13 @@ export class AuthRequestDTO {
   // username may be phone or email according to the auth type
   @ApiProperty({
     description: 'Username',
-    example: 'chameerasandakelum69@gmail.com',
+    example: 'admin@slbus.local',
   })
   username!: string;
 
   @ApiProperty({
     description: 'User password',
-    example: 'password123',
+    example: 'ChangeMe@123',
   })
   password!: string;
 }

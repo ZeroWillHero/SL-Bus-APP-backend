@@ -5,6 +5,7 @@ import { AppError } from '../../common/exceptions/app.exception';
 import { Bus } from './entities/bus.entity';
 import { BusDocument } from './entities/bus-document.entity';
 import { BusOwner } from '../bus-owner/entities/bus-owner.entity';
+import { BusOwnerService } from '../bus-owner/bus-owner.service';
 import { CreateBusDto } from './dto/create-bus.dto';
 import { UpdateBusDto } from './dto/update-bus.dto';
 import { BusDto } from './dto/bus.dto';
@@ -21,12 +22,16 @@ export class BusService {
     private readonly docRepo: Repository<BusDocument>,
     @InjectRepository(BusOwner)
     private readonly ownerRepo: Repository<BusOwner>,
+    private readonly busOwnerService: BusOwnerService,
   ) {}
 
   // ─── BusOwner operations ────────────────────────────────────────────────────
 
   async create(ownerId: string, dto: CreateBusDto): Promise<BusDto> {
-    const owner = await this.ownerRepo.findOne({ where: { id: ownerId } });
+    const owner = await this.ownerRepo.findOne({
+      where: { id: ownerId },
+      relations: ['user'],
+    });
     if (!owner) throw new AppError('Bus owner not found', HttpStatus.NOT_FOUND);
 
     const existing = await this.busRepo.findOne({
@@ -59,14 +64,14 @@ export class BusService {
   ): Promise<BusDto[]> {
     const where: Record<string, unknown> = { owner: { id: ownerId } };
     if (status) where.approvalStatus = status;
-    const buses = await this.busRepo.find({ where, relations: ['owner'] });
+    const buses = await this.busRepo.find({ where, relations: ['owner', 'owner.user'] });
     return buses.map((b) => this.toDto(b));
   }
 
   async findOneByOwner(busId: string, ownerId: string): Promise<BusDto> {
     const bus = await this.busRepo.findOne({
       where: { id: busId, owner: { id: ownerId } },
-      relations: ['owner'],
+      relations: ['owner', 'owner.user'],
     });
     if (!bus) throw new AppError('Bus not found', HttpStatus.NOT_FOUND);
     return this.toDto(bus);
@@ -79,7 +84,7 @@ export class BusService {
   ): Promise<BusDto> {
     const bus = await this.busRepo.findOne({
       where: { id: busId, owner: { id: ownerId } },
-      relations: ['owner'],
+      relations: ['owner', 'owner.user'],
     });
     if (!bus) throw new AppError('Bus not found', HttpStatus.NOT_FOUND);
 
@@ -158,14 +163,14 @@ export class BusService {
 
   async findAll(status?: ApprovalStatus): Promise<BusDto[]> {
     const where = status ? { approvalStatus: status } : {};
-    const buses = await this.busRepo.find({ where, relations: ['owner'] });
+    const buses = await this.busRepo.find({ where, relations: ['owner', 'owner.user'] });
     return buses.map((b) => this.toDto(b));
   }
 
   async findOneAdmin(busId: string): Promise<BusDto> {
     const bus = await this.busRepo.findOne({
       where: { id: busId },
-      relations: ['owner'],
+      relations: ['owner', 'owner.user'],
     });
     if (!bus) throw new AppError('Bus not found', HttpStatus.NOT_FOUND);
     return this.toDto(bus);
@@ -174,7 +179,7 @@ export class BusService {
   async approve(busId: string): Promise<BusDto> {
     const bus = await this.busRepo.findOne({
       where: { id: busId },
-      relations: ['owner'],
+      relations: ['owner', 'owner.user'],
     });
     if (!bus) throw new AppError('Bus not found', HttpStatus.NOT_FOUND);
 
@@ -193,7 +198,7 @@ export class BusService {
     }
     const bus = await this.busRepo.findOne({
       where: { id: busId },
-      relations: ['owner'],
+      relations: ['owner', 'owner.user'],
     });
     if (!bus) throw new AppError('Bus not found', HttpStatus.NOT_FOUND);
 
@@ -222,7 +227,7 @@ export class BusService {
       seatLayoutJson: bus.seatLayoutJson,
       approvalStatus: bus.approvalStatus,
       rejectionReason: bus.rejectionReason,
-      ownerId: bus.owner?.id ?? '',
+      owner: bus.owner ? this.busOwnerService.convertToDto(bus.owner) : undefined,
       createdAt: bus.createdAt,
       updatedAt: bus.updatedAt,
     });
