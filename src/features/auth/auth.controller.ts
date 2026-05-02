@@ -9,7 +9,9 @@ import {
 } from '@nestjs/common';
 import {
   ApiBody,
+  ApiBadRequestResponse,
   ApiCookieAuth,
+  ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -22,6 +24,7 @@ import { AuthRequestDTO } from './dto/authRequest.dto';
 import { AuthResponseDTO } from './dto/auth.response.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { AuthRegisterDTO } from './dto/auth.register.dto';
+import { AuthVerifyDTO } from './dto/auth.verify.dto';
 
 @ApiTags('Auth')
 @Controller('api/v1/auth')
@@ -77,8 +80,21 @@ export class AuthController {
   @ApiOperation({ summary: 'Register a new user' })
   @ApiBody({ type: AuthRequestDTO })
   @ApiOkResponse({ description: 'Registration successful', type: AuthRegisterDTO })
-  @ApiUnauthorizedResponse({ description: 'User already exists' })
+  @ApiBadRequestResponse({ description: 'User already exists' })
   async register(@Body() body: AuthRequestDTO, @Res({ passthrough: true }) res: Response) {
     return this.authService.register(body, res);
+  }
+
+  @Public()
+  @Post('verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify user account using the OTP from registration' })
+  @ApiBody({ type: AuthVerifyDTO })
+  @ApiOkResponse({ description: 'Account verified successfully' })
+  @ApiBadRequestResponse({ description: 'Code expired or account already verified' })
+  @ApiUnauthorizedResponse({ description: 'Invalid verification code' })
+  @ApiNotFoundResponse({ description: 'User not found' })
+  async verify(@Body() body: AuthVerifyDTO) {
+    return this.authService.verify(body);
   }
 }

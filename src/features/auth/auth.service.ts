@@ -2,13 +2,14 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { UserService } from '../user/user.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from '../user/entity/user.entity';
-import { Auth, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { AuthRequestDTO } from './dto/authRequest.dto';
 import { AppError } from '../../common/exceptions/app.exception';
 import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import type { Response } from 'express';
 import { AuthRegisterDTO } from './dto/auth.register.dto';
+import { AuthVerifyDTO } from './dto/auth.verify.dto';
 
 @Injectable()
 export class AuthService {
@@ -85,23 +86,70 @@ export class AuthService {
 
   public async register(data: AuthRequestDTO, res: Response<AuthRegisterDTO>) {
     const existingUser = await this.userRepo.findOne({
-      where: [
-        { email: data.username },
-        { phone: data.username }
-      ]
+      where: [{ email: data.username }, { phone: data.username }],
     });
 
     if (existingUser) {
-      throw new AppError('User with this email or phone already exists', HttpStatus.BAD_REQUEST);
+      throw new AppError(
+        'User with this email or phone already exists',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
+    const verificationCode = this.generateOtp();
+    const verificationCodeExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
     const newUser = this.userRepo.create({
       email: data.username,
       password: hashedPassword,
+      verificationCode,
+      verificationCodeExpiry,
     });
     const savedUser = await this.userRepo.save(newUser);
-    return this.userService.convertToDTO(savedUser);
+    return { user: this.userService.convertToDTO(savedUser), verificationCode };
+  }
+
+  public async verify(data: AuthVerifyDTO) {
+    const user = await this.userRepo.findOne({
+      where: [{ email: data.username }, { phone: data.username }],
+    });
+
+    if (!user) {
+      throw new AppError('User not found', HttpStatus.NOT_FOUND);
+    }
+
+    if (user.isVerified) {
+      throw new AppError('Account is already verified', HttpStatus.BAD_REQUEST);
+    }
+
+    if (
+      !user.verificationCode ||
+      !user.verificationCodeExpiry ||
+      new Date() > user.verificationCodeExpiry
+    ) {
+      throw new AppError(
+        'Verification code has expired',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    if (user.verificationCode !== data.code) {
+      throw new AppError(
+        'Invalid verification code',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    user.isVerified = true;
+    user.verificationCode = null;
+    user.verificationCodeExpiry = null;
+    const verified = await this.userRepo.save(user);
+    return this.userService.convertToDTO(verified);
+  }
+
+  private generateOtp(): string {
+    return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
   private setRefreshCookie(res: Response, token: string) {
