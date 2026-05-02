@@ -213,7 +213,7 @@ export class BusService {
   // ─── Converters ──────────────────────────────────────────────────────────────
 
   toDto(bus: Bus): BusDto {
-    return {
+    return Object.assign(new BusDto(), {
       id: bus.id,
       registrationNumber: bus.registrationNumber,
       model: bus.model,
@@ -225,7 +225,7 @@ export class BusService {
       ownerId: bus.owner?.id ?? '',
       createdAt: bus.createdAt,
       updatedAt: bus.updatedAt,
-    };
+    });
   }
 
   private toDocDto(doc: BusDocument, includeFile: boolean): BusDocumentDto {

@@ -141,7 +141,7 @@ export class AssignmentService {
   }
 
   private busToDto(bus: Bus): BusDto {
-    return {
+    return Object.assign(new BusDto(), {
       id: bus.id,
       registrationNumber: bus.registrationNumber,
       model: bus.model,
@@ -153,6 +153,6 @@ export class AssignmentService {
       ownerId: bus.owner?.id ?? '',
       createdAt: bus.createdAt,
       updatedAt: bus.updatedAt,
-    };
+    });
   }
 }

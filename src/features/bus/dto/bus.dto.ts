@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ApprovalStatus } from '../enums/approval-status.enum';
+import { BusOwnerDto } from '../../bus-owner/dto/bus-owner.dto';
 
 export class BusDto {
   @ApiProperty()
@@ -27,7 +28,7 @@ export class BusDto {
   rejectionReason!: string | null;
 
   @ApiProperty()
-  ownerId!: string;
+  owner!: BusOwnerDto;
 
   @ApiProperty()
   createdAt!: Date;
