@@ -74,11 +74,14 @@ export class AuthService {
   }
 
   logout(res: Response) {
+    const isProd = process.env.NODE_ENV === 'production';
+    const sameSite: 'lax' | 'strict' | 'none' = isProd ? 'none' : 'lax';
+    const cookiePath = process.env.REFRESH_COOKIE_PATH || '/api/v1/auth/refresh';
     res.cookie('refresh_token', '', {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/api/v1/auth/refresh',
+      secure: isProd,
+      sameSite,
+      path: cookiePath,
       maxAge: 0,
     });
     return null;
@@ -119,11 +122,14 @@ export class AuthService {
   }
 
   private setRefreshCookie(res: Response, token: string) {
+    const isProd = process.env.NODE_ENV === 'production';
+    const sameSite: 'lax' | 'strict' | 'none' = isProd ? 'none' : 'lax';
+    const cookiePath = process.env.REFRESH_COOKIE_PATH || '/api/v1/auth/refresh';
     res.cookie('refresh_token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      path: '/api/v1/auth/refresh',
+      secure: isProd,
+      sameSite,
+      path: cookiePath,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
   }
