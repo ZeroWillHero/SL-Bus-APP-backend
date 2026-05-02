@@ -135,7 +135,7 @@ export class PaymentService {
       .getMany();
 
     return {
-      data: payments.map((p) => this.toAdminDto(p)),
+      items: payments.map((p) => this.toAdminDto(p)),
       total,
       page,
       limit,

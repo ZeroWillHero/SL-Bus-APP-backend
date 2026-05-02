@@ -17,7 +17,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { BusOwnerService } from '../bus-owner/bus-owner.service';
-import { BusOwnerDto } from '../bus-owner/dto/bus-owner.dto';
+import { BusOwnerPageDto } from '../bus-owner/dto/bus-owner-page.dto';
 import { BusService } from '../bus/bus.service';
 import { BusDto } from '../bus/dto/bus.dto';
 import { BusDocumentDto } from '../bus/dto/bus-document.dto';
@@ -33,6 +33,7 @@ import { UpdateCouponDto } from '../coupon/dto/update-coupon.dto';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ApprovalStatus } from '../bus/enums/approval-status.enum';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
@@ -44,15 +45,58 @@ export class AdminController {
     private readonly busService: BusService,
     private readonly paymentService: PaymentService,
     private readonly couponService: CouponService,
-  ) {}
+  ) { }
 
   // ─── Bus Owner ────────────────────────────────────────────────────────────────
-
   @Get('bus-owners')
-  @ApiOperation({ summary: 'List all bus owners' })
-  @ApiOkResponse({ type: [BusOwnerDto] })
-  async listBusOwners(): Promise<ResponseDTO<BusOwnerDto[]>> {
-    const result = await this.busOwnerService.findAll();
+  @ApiOperation({
+    summary:
+      'List bus owners (paginated, filterable, sortable by createdAt)',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description:
+      'Search across firstName, lastName, nicNumber, address, contactNumber',
+  })
+  @ApiQuery({ name: 'email', required: false })
+  @ApiQuery({ name: 'contactNumber', required: false })
+  @ApiQuery({
+    name: 'isActive',
+    required: false,
+    type: Boolean,
+    description: 'Filter by user active (verified) status',
+  })
+  @ApiQuery({
+    name: 'sortOrder',
+    required: false,
+    enum: ['ASC', 'DESC'],
+    description: 'Sort order for createdAt (default DESC)',
+  })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOkResponse({ type: BusOwnerPageDto })
+  async listBusOwners(
+    @Query('search') search?: string,
+    @Query('email') email?: string,
+    @Query('contactNumber') contactNumber?: string,
+    @Query('isActive') isActive?: string,
+    @Query('sortOrder') sortOrder?: 'ASC' | 'DESC',
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): Promise<ResponseDTO<BusOwnerPageDto>> {
+    const result = await this.busOwnerService.listForAdmin({
+      search,
+      email,
+      contactNumber,
+      isActive:
+        isActive === undefined || isActive === ''
+          ? undefined
+          : isActive === 'true',
+      sortOrder,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined,
+    });
     return new ResponseDTO(true, 'Bus owners fetched successfully', result);
   }
 

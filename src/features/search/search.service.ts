@@ -82,7 +82,7 @@ export class SearchService {
       .take(limit)
       .getMany();
 
-    const data: SearchResultDto[] = await Promise.all(
+    const items: SearchResultDto[] = await Promise.all(
       schedules.map(async (s) => {
         const departureHHMM = String(s.departureTime).substring(0, 5);
         const confirmedSeats = await this.bookingService.countConfirmedSeats(
@@ -114,7 +114,7 @@ export class SearchService {
     );
 
     return {
-      data,
+      items,
       total,
       page,
       limit,

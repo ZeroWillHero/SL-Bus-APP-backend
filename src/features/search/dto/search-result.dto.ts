@@ -54,7 +54,7 @@ export class SearchResultDto {
 
 export class SearchPageDto {
   @ApiProperty({ type: [SearchResultDto] })
-  data!: SearchResultDto[];
+  items!: SearchResultDto[];
 
   @ApiProperty()
   total!: number;

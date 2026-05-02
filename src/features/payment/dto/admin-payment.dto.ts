@@ -59,7 +59,7 @@ export class PaymentStatsDto {
 
 export class AdminPaymentPageDto {
   @ApiProperty({ type: [AdminPaymentDto] })
-  data!: AdminPaymentDto[];
+  items!: AdminPaymentDto[];
 
   @ApiProperty()
   total!: number;
