@@ -2,18 +2,24 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { UserService } from '../user/user.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from '../user/entity/user.entity';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
+import { UserVerification } from './entities/user-verification.entity';
 import { AuthRequestDTO } from './dto/authRequest.dto';
+import { VerifyRequestResponseDto, VerifyResponseDto } from './dto/verify.dto';
 import { AppError } from '../../common/exceptions/app.exception';
 import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import type { Response } from 'express';
+
+const OTP_TTL_MINUTES = 15;
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly userService: UserService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
+    @InjectRepository(UserVerification)
+    private readonly verificationRepo: Repository<UserVerification>,
   ) {}
 
   async login(data: AuthRequestDTO, res: Response) {
@@ -74,18 +80,77 @@ export class AuthService {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      path: '/auth/refresh',
+      path: '/api/v1/auth/refresh',
       maxAge: 0,
     });
     return null;
   }
+
+  // ─── Email verification ───────────────────────────────────────────────────────
+
+  async requestVerification(userId: string): Promise<VerifyRequestResponseDto> {
+    const user = await this.userRepo.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new AppError('User not found', HttpStatus.NOT_FOUND);
+    }
+    if (user.isVerified) {
+      throw new AppError('Account is already verified', HttpStatus.CONFLICT);
+    }
+
+    // Invalidate any unexpired tokens for this user
+    await this.verificationRepo
+      .createQueryBuilder()
+      .update(UserVerification)
+      .set({ usedAt: new Date() })
+      .where('userId = :userId AND usedAt IS NULL AND expiresAt > NOW()', { userId })
+      .execute();
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
+
+    await this.verificationRepo.save(
+      this.verificationRepo.create({ user, otp, expiresAt }),
+    );
+
+    // TODO: replace the returned OTP with an email/SMS delivery in production
+    return {
+      otp,
+      expiresAt,
+      message: `OTP generated. Valid for ${OTP_TTL_MINUTES} minutes.`,
+    };
+  }
+
+  async verifyAccount(token: string): Promise<VerifyResponseDto> {
+    const record = await this.verificationRepo.findOne({
+      where: { otp: token, usedAt: IsNull() },
+      relations: ['user'],
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!record || record.usedAt !== null) {
+      throw new AppError('Invalid or already used OTP', HttpStatus.BAD_REQUEST);
+    }
+    if (new Date() > record.expiresAt) {
+      throw new AppError('OTP has expired', HttpStatus.BAD_REQUEST);
+    }
+    if (record.user.isVerified) {
+      throw new AppError('Account is already verified', HttpStatus.CONFLICT);
+    }
+
+    await this.verificationRepo.update(record.id, { usedAt: new Date() });
+    await this.userRepo.update(record.user.id, { isVerified: true });
+
+    return { message: 'Account verified successfully' };
+  }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────────
 
   private setRefreshCookie(res: Response, token: string) {
     res.cookie('refresh_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      path: '/auth/refresh',
+      path: '/api/v1/auth/refresh',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
   }

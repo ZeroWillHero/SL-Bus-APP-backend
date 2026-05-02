@@ -8,8 +8,11 @@ import {
   Res,
 } from '@nestjs/common';
 import {
+  ApiBasicAuth,
+  ApiBearerAuth,
   ApiBody,
   ApiCookieAuth,
+  ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -20,10 +23,12 @@ import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { AuthRequestDTO } from './dto/authRequest.dto';
 import { AuthResponseDTO } from './dto/auth.response.dto';
+import { VerifyOtpDto, VerifyRequestResponseDto, VerifyResponseDto } from './dto/verify.dto';
 import { Public } from '../../common/decorators/public.decorator';
+import { AuthenticatedUser } from './strategies/jwt.strategy';
 
 @ApiTags('Auth')
-@Controller('auth')
+@Controller('api/v1/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
@@ -67,5 +72,37 @@ export class AuthController {
   @ApiOkResponse({ description: 'Logged out successfully' })
   logout(@Res({ passthrough: true }) res: Response) {
     return this.authService.logout(res);
+  }
+
+  // ─── Account verification ─────────────────────────────────────────────────────
+
+  @Post('verify/request')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Request a verification OTP for the authenticated user',
+    description:
+      'Generates a 6-digit OTP valid for 15 minutes. ' +
+      'In production this would be delivered via email or SMS. ' +
+      'The OTP is returned in the response for development convenience.',
+  })
+  @ApiOkResponse({ type: VerifyRequestResponseDto })
+  async requestVerification(
+    @Req() req: Request,
+  ): Promise<VerifyRequestResponseDto> {
+    const user = req.user as AuthenticatedUser;
+    return this.authService.requestVerification(user.userId);
+  }
+
+  @Public()
+  @Post('verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Verify account using the OTP received from /verify/request',
+  })
+  @ApiBody({ type: VerifyOtpDto })
+  @ApiOkResponse({ type: VerifyResponseDto })
+  async verify(@Body() body: VerifyOtpDto): Promise<VerifyResponseDto> {
+    return this.authService.verifyAccount(body.token);
   }
 }
