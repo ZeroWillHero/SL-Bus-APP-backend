@@ -10,7 +10,18 @@ import { BusOwner } from './entities/bus-owner.entity';
 import { CreateBusOwnerDto } from './dto/create-bus-owner.dto';
 import { UpdateBusOwnerDto } from './dto/update-bus-owner.dto';
 import { BusOwnerDto } from './dto/bus-owner.dto';
+import { BusOwnerPageDto } from './dto/bus-owner-page.dto';
 import { UserDTO } from '../user/dto/user.dto';
+
+export interface BusOwnerAdminListFilters {
+  search?: string;
+  email?: string;
+  contactNumber?: string;
+  isActive?: boolean;
+  sortOrder?: 'ASC' | 'DESC';
+  page?: number;
+  limit?: number;
+}
 
 @Injectable()
 export class BusOwnerService {
@@ -95,6 +106,57 @@ export class BusOwnerService {
   async findAll(): Promise<BusOwnerDto[]> {
     const owners = await this.busOwnerRepo.find({ relations: ['user'] });
     return owners.map((o) => this.convertToDto(o));
+  }
+
+  async listForAdmin(
+    filters: BusOwnerAdminListFilters,
+  ): Promise<BusOwnerPageDto> {
+    const page = filters.page && filters.page > 0 ? filters.page : 1;
+    const limit = filters.limit && filters.limit > 0 ? filters.limit : 20;
+    const sortOrder = filters.sortOrder === 'ASC' ? 'ASC' : 'DESC';
+
+    const qb = this.busOwnerRepo
+      .createQueryBuilder('owner')
+      .innerJoinAndSelect('owner.user', 'user');
+
+    if (filters.search) {
+      qb.andWhere(
+        '(owner.firstName ILIKE :search OR owner.lastName ILIKE :search OR owner.nicNumber ILIKE :search OR owner.address ILIKE :search OR owner.contactNumber ILIKE :search)',
+        { search: `%${filters.search}%` },
+      );
+    }
+
+    if (filters.email) {
+      qb.andWhere('user.email ILIKE :email', {
+        email: `%${filters.email}%`,
+      });
+    }
+
+    if (filters.contactNumber) {
+      qb.andWhere('owner.contactNumber ILIKE :contactNumber', {
+        contactNumber: `%${filters.contactNumber}%`,
+      });
+    }
+
+    if (typeof filters.isActive === 'boolean') {
+      qb.andWhere('user.isVerified = :isActive', { isActive: filters.isActive });
+    }
+
+    qb.orderBy('user.createdAt', sortOrder);
+
+    const total = await qb.getCount();
+    const owners = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return {
+      items: owners.map((o) => this.convertToDto(o)),
+      total,
+      page,
+      limit,
+      pages: limit > 0 ? Math.ceil(total / limit) : 0,
+    };
   }
 
   async findByUserId(userId: string): Promise<BusOwnerDto> {

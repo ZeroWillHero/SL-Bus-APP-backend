@@ -24,7 +24,7 @@ import { Public } from '../../common/decorators/public.decorator';
 import { AuthRegisterDTO } from './dto/auth.register.dto';
 
 @ApiTags('Auth')
-@Controller('auth')
+@Controller('api/v1/auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) { }
 
@@ -62,6 +62,7 @@ export class AuthController {
     return this.authService.refresh(refreshToken, res);
   }
 
+  @Public()
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Logout and clear the refresh-token cookie' })

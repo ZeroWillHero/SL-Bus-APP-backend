@@ -15,11 +15,13 @@ export class AuthService {
   constructor(
     private readonly userService: UserService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
-  ) {}
+  ) { }
 
   async login(data: AuthRequestDTO, res: Response) {
     const user = await this.userService.findByEmailOrPhone(data.username);
+    // user && console.log('User found for login:', user.email); // Debug log
     if (!user) {
+      console.log('No user found with username:', data.username); // Debug log
       throw new AppError(
         'Invalid username or password',
         HttpStatus.UNAUTHORIZED,
@@ -75,13 +77,13 @@ export class AuthService {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      path: '/auth/refresh',
+      path: '/api/v1/auth/refresh',
       maxAge: 0,
     });
     return null;
   }
 
-  public async register (data: AuthRequestDTO, res: Response<AuthRegisterDTO>) {
+  public async register(data: AuthRequestDTO, res: Response<AuthRegisterDTO>) {
     const existingUser = await this.userRepo.findOne({
       where: [
         { email: data.username },
@@ -89,7 +91,7 @@ export class AuthService {
       ]
     });
 
-    if(existingUser) {
+    if (existingUser) {
       throw new AppError('User with this email or phone already exists', HttpStatus.BAD_REQUEST);
     }
 
@@ -107,7 +109,7 @@ export class AuthService {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      path: '/auth/refresh',
+      path: '/api/v1/auth/refresh',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
   }
