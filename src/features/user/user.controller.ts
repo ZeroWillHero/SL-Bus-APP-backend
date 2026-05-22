@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Req } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Req } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiOkResponse,
@@ -10,12 +10,14 @@ import { UserService } from './user.service';
 import { UserDTO } from './dto/user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { VerifyDto } from './dto/verify.dto';
+import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('User')
-@ApiBearerAuth()
+// @ApiBearerAuth()
 @Controller('user')
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(private readonly userService: UserService) { }
 
   @Get('me')
   @ApiOperation({ summary: 'Get own user profile' })
@@ -31,5 +33,13 @@ export class UserController {
   updateMe(@Req() req: Request, @Body() body: UpdateUserDto): Promise<UserDTO> {
     const user = req.user as AuthenticatedUser;
     return this.userService.update(user.userId, body);
+  }
+
+  @Public()
+  @Post('verify')
+  @ApiOperation({ summary: 'Verify user account' })
+  @ApiOkResponse({ type: UserDTO })
+  verifyUser(@Body() body: VerifyDto): Promise<void> {
+    return this.userService.verifyUser(body.phone, body.otp);
   }
 }

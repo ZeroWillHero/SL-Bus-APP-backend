@@ -2,10 +2,12 @@ import {
   Column,
   Entity,
   JoinColumn,
+  OneToMany,
   OneToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { User } from '../../user/entity/user.entity';
+import { Bus } from '../../bus/entities/bus.entity';
 
 @Entity()
 export class BusOwner {
@@ -30,4 +32,7 @@ export class BusOwner {
   @OneToOne(() => User, (user) => user.busOwner, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user!: User;
+
+  @OneToMany(() => Bus, (bus) => bus.owner)
+  buses?: Bus[];
 }

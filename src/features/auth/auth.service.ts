@@ -35,6 +35,12 @@ export class AuthService {
         HttpStatus.UNAUTHORIZED,
       );
     }
+    if (!user.isVerified) {
+      throw new AppError(
+        'Account not verified. Please verify your phone number before logging in.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
     const accessToken = this.generateAccessToken(user);
     const refreshToken = this.generateRefreshToken(user);
     this.setRefreshCookie(res, refreshToken);

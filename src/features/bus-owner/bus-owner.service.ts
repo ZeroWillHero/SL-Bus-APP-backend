@@ -12,6 +12,8 @@ import { UpdateBusOwnerDto } from './dto/update-bus-owner.dto';
 import { BusOwnerDto } from './dto/bus-owner.dto';
 import { BusOwnerPageDto } from './dto/bus-owner-page.dto';
 import { UserDTO } from '../user/dto/user.dto';
+import { Bus } from '../bus/entities/bus.entity';
+import { BusDto } from '../bus/dto/bus.dto';
 
 export interface BusOwnerAdminListFilters {
   search?: string;
@@ -83,7 +85,7 @@ export class BusOwnerService {
       const saved = await queryRunner.manager.save(busOwner);
       const withUser = await queryRunner.manager.findOne(BusOwner, {
         where: { id: saved.id },
-        relations: ['user'],
+        relations: ['user', 'buses'],
       });
 
       if (!withUser)
@@ -104,7 +106,9 @@ export class BusOwnerService {
   }
 
   async findAll(): Promise<BusOwnerDto[]> {
-    const owners = await this.busOwnerRepo.find({ relations: ['user'] });
+    const owners = await this.busOwnerRepo.find({
+      relations: ['user', 'buses'],
+    });
     return owners.map((o) => this.convertToDto(o));
   }
 
@@ -117,7 +121,8 @@ export class BusOwnerService {
 
     const qb = this.busOwnerRepo
       .createQueryBuilder('owner')
-      .innerJoinAndSelect('owner.user', 'user');
+      .innerJoinAndSelect('owner.user', 'user')
+      .leftJoinAndSelect('owner.buses', 'buses');
 
     if (filters.search) {
       qb.andWhere(
@@ -159,10 +164,15 @@ export class BusOwnerService {
     };
   }
 
-  async findByUserId(userId: string): Promise<BusOwnerDto> {
+  async findByUserId(
+    userId: string,
+    options: { includeBuses?: boolean } = {},
+  ): Promise<BusOwnerDto> {
+    const relations = ['user'];
+    if (options.includeBuses) relations.push('buses');
     const owner = await this.busOwnerRepo.findOne({
       where: { user: { id: userId } },
-      relations: ['user'],
+      relations,
     });
     if (!owner)
       throw new AppError('Bus owner profile not found', HttpStatus.NOT_FOUND);
@@ -175,7 +185,7 @@ export class BusOwnerService {
   ): Promise<BusOwnerDto> {
     const owner = await this.busOwnerRepo.findOne({
       where: { id: busOwnerId },
-      relations: ['user'],
+      relations: ['user', 'buses'],
     });
     if (!owner) throw new AppError('Bus owner not found', HttpStatus.NOT_FOUND);
 
@@ -199,6 +209,7 @@ export class BusOwnerService {
       nicNumber: owner.nicNumber,
       address: owner.address,
       user: owner.user ? this.convertUserToDto(owner.user) : undefined,
+      buses: owner.buses ? owner.buses.map((b) => this.convertBusToDto(b)) : undefined,
     };
   }
 
@@ -211,6 +222,21 @@ export class BusOwnerService {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
+  }
+
+  private convertBusToDto(bus: Bus): BusDto {
+    return Object.assign(new BusDto(), {
+      id: bus.id,
+      registrationNumber: bus.registrationNumber,
+      model: bus.model,
+      year: bus.year,
+      totalSeats: bus.totalSeats,
+      seatLayoutJson: bus.seatLayoutJson,
+      approvalStatus: bus.approvalStatus,
+      rejectionReason: bus.rejectionReason,
+      createdAt: bus.createdAt,
+      updatedAt: bus.updatedAt,
+    });
   }
 
   private async ensureNicUnique(

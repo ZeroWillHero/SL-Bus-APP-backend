@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { UserDTO } from '../../user/dto/user.dto';
+import { BusDto } from '../../bus/dto/bus.dto';
 
 export class BusOwnerDto {
   @ApiProperty({ example: 'uuid' })
@@ -22,4 +23,7 @@ export class BusOwnerDto {
 
   @ApiProperty({ required: false })
   user?: UserDTO;
+
+  @ApiProperty({ type: () => [BusDto], required: false })
+  buses?: BusDto[];
 }
