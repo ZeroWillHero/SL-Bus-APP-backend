@@ -13,6 +13,7 @@ import {
   ApiBody,
   ApiBadRequestResponse,
   ApiCookieAuth,
+  ApiForbiddenResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -40,6 +41,7 @@ export class AuthController {
   @ApiBody({ type: AuthRequestDTO })
   @ApiOkResponse({ description: 'Login successful', type: AuthResponseDTO })
   @ApiUnauthorizedResponse({ description: 'Invalid username or password' })
+  @ApiForbiddenResponse({ description: 'Account not verified — OTP verification required' })
   async login(
     @Body() body: AuthRequestDTO,
     @Res({ passthrough: true }) res: Response,

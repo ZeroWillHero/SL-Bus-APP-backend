@@ -93,7 +93,7 @@ export class AuthService {
     return null;
   }
 
-  public async register(data: AuthRequestDTO, res: Response<AuthRegisterDTO>) {
+  public async register(data: AuthRequestDTO, _res: Response<AuthRegisterDTO>) {
     const existingUser = await this.userRepo.findOne({
       where: [{ email: data.username }, { phone: data.username }],
     });
