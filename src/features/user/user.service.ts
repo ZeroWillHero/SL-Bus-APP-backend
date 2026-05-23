@@ -13,7 +13,7 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-  ) {}
+  ) { }
 
   async create(data: CreateUserDTO, manager?: EntityManager): Promise<UserDTO> {
     const repo = manager ? manager.getRepository(User) : this.userRepository;
@@ -115,6 +115,30 @@ export class UserService {
     }
 
     await this.userRepository.remove(user);
+  }
+
+  private async getUserByPhone(phone: string): Promise<User> {
+    const user = await this.userRepository.findOneBy({
+      phone
+    });
+
+    if (!user) {
+      throw new AppError("User not found", HttpStatus.NOT_FOUND);
+    }
+
+    return user;
+  }
+
+  // verify user
+  async verifyUser(phone: string, otp: String) {
+    const user = await this.getUserByPhone(phone);
+
+    if (user.isVerified) {
+      throw new AppError("User already verified", HttpStatus.BAD_REQUEST);
+    }
+
+    user.isVerified = true;
+    await this.userRepository.save(user);
   }
 
   // required functions

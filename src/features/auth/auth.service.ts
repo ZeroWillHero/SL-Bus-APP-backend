@@ -35,6 +35,12 @@ export class AuthService {
         HttpStatus.UNAUTHORIZED,
       );
     }
+    if (!user.isVerified) {
+      throw new AppError(
+        'Account not verified. Please verify your phone number before logging in.',
+        HttpStatus.FORBIDDEN,
+      );
+    }
     const accessToken = this.generateAccessToken(user);
     const refreshToken = this.generateRefreshToken(user);
     this.setRefreshCookie(res, refreshToken);
@@ -87,7 +93,7 @@ export class AuthService {
     return null;
   }
 
-  public async register(data: AuthRequestDTO, res: Response<AuthRegisterDTO>) {
+  public async register(data: AuthRequestDTO, _res: Response<AuthRegisterDTO>) {
     const existingUser = await this.userRepo.findOne({
       where: [{ email: data.username }, { phone: data.username }],
     });

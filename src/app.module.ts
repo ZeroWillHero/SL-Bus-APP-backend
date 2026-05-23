@@ -21,6 +21,8 @@ import { CouponModule } from './features/coupon/coupon.module';
 import { CacheModule } from './common/cache/cache.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { OtpModule } from './features/otp/otp.module';
+import { SmsModule } from './features/sms/sms.module';
 
 const envFilePath = process.env.NODE_ENV
   ? [
@@ -51,6 +53,8 @@ const envFilePath = process.env.NODE_ENV
     BookingModule,
     PaymentModule,
     CouponModule,
+    OtpModule,
+    SmsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

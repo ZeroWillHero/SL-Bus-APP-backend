@@ -39,7 +39,9 @@ export class BusOwnerController {
   @ApiOkResponse({ type: BusOwnerDto })
   async getMe(@Req() req: Request): Promise<ResponseDTO<BusOwnerDto>> {
     const user = req.user as AuthenticatedUser;
-    const result = await this.busOwnerService.findByUserId(user.userId);
+    const result = await this.busOwnerService.findByUserId(user.userId, {
+      includeBuses: true,
+    });
     return new ResponseDTO(true, 'Profile fetched successfully', result);
   }
 
