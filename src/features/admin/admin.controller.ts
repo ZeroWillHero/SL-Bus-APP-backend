@@ -33,7 +33,6 @@ import { UpdateCouponDto } from '../coupon/dto/update-coupon.dto';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ApprovalStatus } from '../bus/enums/approval-status.enum';
-import { Public } from '../../common/decorators/public.decorator';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
