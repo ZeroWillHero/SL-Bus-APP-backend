@@ -65,9 +65,11 @@ export class OtpService {
   }
 
   private normalize(input: string): string {
-    const digits = input.replace(/\D/g, '');
-    if (digits.startsWith('94')) return digits;
-    if (digits.startsWith('0')) return `94${digits.slice(1)}`;
-    return digits;
+    const trimmed = input.trim();
+    if (trimmed.startsWith('+')) return trimmed;
+    const digits = trimmed.replace(/\D/g, '');
+    if (digits.startsWith('0')) return `+94${digits.slice(1)}`;
+    if (digits.startsWith('94')) return `+${digits}`;
+    return trimmed;
   }
 }

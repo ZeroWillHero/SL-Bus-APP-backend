@@ -10,11 +10,13 @@ import * as jwt from 'jsonwebtoken';
 import type { Response } from 'express';
 import { AuthRegisterDTO } from './dto/auth.register.dto';
 import { AuthenticatedUser } from './strategies/jwt.strategy';
+import { OtpService } from '../otp/otp.service';
 
 @Injectable()
 export class AuthService {
   constructor(
     private readonly userService: UserService,
+    private readonly otpService: OtpService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
   ) { }
 
@@ -28,6 +30,16 @@ export class AuthService {
         HttpStatus.UNAUTHORIZED,
       );
     }
+    // find id otp vaid ?
+    const otpValid = await this.otpService.verify(user.phone, data.otp).catch(() => null);
+    
+    if (!otpValid) {
+      throw new AppError(
+        'Invalid or missing OTP for 2FA verification',
+        HttpStatus.FORBIDDEN,
+      );
+    }
+
     const isPasswordValid = await bcrypt.compare(data.password, user.password);
     if (!isPasswordValid) {
       throw new AppError(

@@ -101,8 +101,7 @@ export class UserService {
   // find user BY Email or phone — loads userRoles.role for JWT claims
   async findByEmailOrPhone(emailOrPhone: string): Promise<User | null> {
     return this.userRepository.findOne({
-      where: [{ email: emailOrPhone }, { phone: emailOrPhone }],
-      relations: ['userRoles', 'userRoles.role'],
+      where: [{ email: emailOrPhone }, { phone: emailOrPhone }]
     });
   }
 

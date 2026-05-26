@@ -24,6 +24,7 @@ import { ConductorDTO } from './dto/conductor.dto';
 import { BusDto } from '../bus/dto/bus.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { Public } from '../../common/decorators/public.decorator';
 
 @Controller('api/v1/conductor')
 @ApiTags('Conductor')
@@ -31,9 +32,10 @@ export class ConductorController {
   constructor(
     private readonly conductorService: ConductorService,
     private readonly assignmentService: AssignmentService,
-  ) {}
+  ) { }
 
   @Post()
+  @Public()
   async create(
     @Body() createConductorDto: CreateConductorDto,
   ): Promise<ResponseDTO<ConductorDTO>> {
@@ -96,11 +98,11 @@ export class ConductorController {
   async myBuses(@Req() req: Request): Promise<ResponseDTO<BusDto[]>> {
     const user = req.user as AuthenticatedUser;
     const conductor = await this.conductorService.findByUserId(user.userId);
-    if(!conductor) {
+    if (!conductor) {
       return new ResponseDTO<BusDto[]>(false, 'Conductor profile not found', []);
     }
     const result = await this.assignmentService.listBusesByConductor(
-    conductor.id!,
+      conductor.id!,
     );
     return new ResponseDTO(true, 'Assigned buses fetched successfully', result);
   }
