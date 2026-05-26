@@ -13,4 +13,10 @@ export class AuthRequestDTO {
     example: 'ChangeMe@123',
   })
   password!: string;
+
+  @ApiProperty({
+    description: 'otp for 2FA verification',
+    example: '123456',
+  })
+  otp!: string;
 }

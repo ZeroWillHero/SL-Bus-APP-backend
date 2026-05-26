@@ -1,7 +1,7 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, OmitType } from '@nestjs/swagger';
 import { CreateUserDTO } from '../../user/dto/create-user.dto';
 
-export class CreateConductorDto extends CreateUserDTO {
+export class CreateConductorDto extends OmitType(CreateUserDTO, ['phone'] as const) {
   @ApiProperty({
     description: 'Conductor first name',
     example: 'John',
