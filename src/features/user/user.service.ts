@@ -98,10 +98,10 @@ export class UserService {
     return this.convertToDTO(updatedUser);
   }
 
-  // find user BY Email or phone — loads userRoles.role for JWT claims
   async findByEmailOrPhone(emailOrPhone: string): Promise<User | null> {
     return this.userRepository.findOne({
-      where: [{ email: emailOrPhone }, { phone: emailOrPhone }]
+      where: [{ email: emailOrPhone }, { phone: emailOrPhone }],
+      relations: ['userRoles', 'userRoles.role'],
     });
   }
 
@@ -140,13 +140,13 @@ export class UserService {
     await this.userRepository.save(user);
   }
 
-  // required functions
   convertToDTO(user: User): UserDTO {
     return {
       id: user.id,
       email: user.email ?? '',
       phone: user.phone,
       isVerified: user.isVerified,
+      roles: user.userRoles?.map((ur) => ur.role.name).filter((n): n is string => !!n) ?? [],
       conductor: user.conductor,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

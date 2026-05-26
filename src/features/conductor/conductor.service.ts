@@ -216,6 +216,7 @@ export class ConductorService {
       email: user.email,
       phone: user.phone,
       isVerified: user.isVerified,
+      roles: user.userRoles?.map((ur) => ur.role.name).filter((n): n is string => !!n) ?? [],
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       conductor: user.conductor,
