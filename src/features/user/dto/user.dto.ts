@@ -28,6 +28,12 @@ export class UserDTO {
   isVerified!: boolean;
 
   @ApiProperty({
+    description: 'Roles assigned to the user',
+    example: ['admin', 'customer'],
+  })
+  roles!: string[];
+
+  @ApiProperty({
     description: 'The date and time when the user was created',
     example: '2023-01-01T00:00:00.000Z',
   })
