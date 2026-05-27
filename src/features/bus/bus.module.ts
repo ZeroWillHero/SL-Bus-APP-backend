@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { forwardRef, Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BusService } from './bus.service';
 import { BusController } from './bus.controller';
@@ -23,7 +23,7 @@ import { ConductorModule } from '../conductor/conductor.module';
     ]),
     BusOwnerModule,
     RouteModule,
-    ConductorModule,
+    forwardRef(() => ConductorModule),
   ],
   controllers: [BusController],
   providers: [BusService, AssignmentService],
