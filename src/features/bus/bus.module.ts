@@ -10,6 +10,7 @@ import { BusOwner } from '../bus-owner/entities/bus-owner.entity';
 import { Conductor } from '../conductor/entities/conductor.entity';
 import { BusOwnerModule } from '../bus-owner/bus-owner.module';
 import { RouteModule } from '../route/route.module';
+import { ConductorModule } from '../conductor/conductor.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { RouteModule } from '../route/route.module';
     ]),
     BusOwnerModule,
     RouteModule,
+    ConductorModule,
   ],
   controllers: [BusController],
   providers: [BusService, AssignmentService],

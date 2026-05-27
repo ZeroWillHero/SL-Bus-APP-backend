@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { forwardRef, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BusAssignment } from './entities/bus-assignment.entity';
@@ -7,6 +7,7 @@ import { Conductor } from '../conductor/entities/conductor.entity';
 import { AppError } from '../../common/exceptions/app.exception';
 import { BusAssignmentDto } from './dto/bus-assignment.dto';
 import { BusDto } from './dto/bus.dto';
+import { BusService } from './bus.service';
 import { ApprovalStatus } from './enums/approval-status.enum';
 
 @Injectable()
@@ -18,6 +19,8 @@ export class AssignmentService {
     private readonly busRepo: Repository<Bus>,
     @InjectRepository(Conductor)
     private readonly conductorRepo: Repository<Conductor>,
+    @Inject(forwardRef(() => BusService))
+    private readonly busService: BusService,
   ) {}
 
   async assign(
@@ -112,9 +115,9 @@ export class AssignmentService {
   async listBusesByConductor(conductorId: string): Promise<BusDto[]> {
     const assignments = await this.assignmentRepo.find({
       where: { conductor: { id: conductorId }, isActive: true },
-      relations: ['bus', 'bus.owner', 'conductor'],
+      relations: ['bus', 'bus.owner', 'bus.owner.user', 'bus.routes'],
     });
-    return assignments.map((a) => this.busToDto(a.bus));
+    return assignments.map((a) => this.busService.toDto(a.bus));
   }
 
   isAssigned(
@@ -138,21 +141,5 @@ export class AssignmentService {
       isActive: a.isActive,
       assignedAt: a.assignedAt,
     };
-  }
-
-  private busToDto(bus: Bus): BusDto {
-    return Object.assign(new BusDto(), {
-      id: bus.id,
-      registrationNumber: bus.registrationNumber,
-      model: bus.model,
-      year: bus.year,
-      totalSeats: bus.totalSeats,
-      seatLayoutJson: bus.seatLayoutJson,
-      approvalStatus: bus.approvalStatus,
-      rejectionReason: bus.rejectionReason,
-      ownerId: bus.owner?.id ?? '',
-      createdAt: bus.createdAt,
-      updatedAt: bus.updatedAt,
-    });
   }
 }
