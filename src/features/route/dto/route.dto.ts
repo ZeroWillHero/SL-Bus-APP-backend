@@ -22,6 +22,9 @@ export class RouteDto {
   @ApiProperty()
   ownerId!: string;
 
+  @ApiProperty({ required: false, nullable: true })
+  busId!: string | null;
+
   @ApiProperty()
   isActive!: boolean;
 

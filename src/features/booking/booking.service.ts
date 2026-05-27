@@ -1,6 +1,8 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, In, Repository } from 'typeorm';
+import { randomUUID } from 'crypto';
+import * as QRCode from 'qrcode';
 import { Booking } from './entities/booking.entity';
 import { BookedSeat } from './entities/booked-seat.entity';
 import { Schedule } from '../schedule/entities/schedule.entity';
@@ -205,6 +207,7 @@ export class BookingService {
         discountAmount,
         coupon: appliedCoupon,
         status: BookingStatus.PENDING_PAYMENT,
+        ticketToken: randomUUID(),
       });
       const savedBooking = await qr.manager.save(booking);
 
@@ -358,6 +361,8 @@ export class BookingService {
     const deptHHMM = String(schedule.departureTime).substring(0, 5);
     const discountAmount = Number(booking.discountAmount);
 
+    const qrCode = await QRCode.toDataURL(booking.ticketToken!);
+
     return {
       bookingId: booking.id,
       ticketRef: `TKT-${booking.id.substring(0, 8).toUpperCase()}`,
@@ -380,6 +385,7 @@ export class BookingService {
       paymentStatus: payment.status,
       paidAt: payment.paidAt,
       bookedAt: booking.bookedAt,
+      qrCode,
     };
   }
 
@@ -419,6 +425,77 @@ export class BookingService {
     booking.status = BookingStatus.BOARDED;
     const saved = await this.bookingRepo.save(booking);
     return this.toDto(saved);
+  }
+
+  async verifyTicket(token: string, conductorUserId: string): Promise<BookingDto> {
+    const conductor = await this.conductorRepo.findOne({
+      where: { user: { id: conductorUserId } },
+    });
+    if (!conductor) {
+      throw new AppError('Conductor profile not found', HttpStatus.FORBIDDEN);
+    }
+
+    const booking = await this.bookingRepo.findOne({
+      where: { ticketToken: token },
+      relations: ['schedule', 'schedule.bus', 'customer', 'coupon'],
+    });
+    if (!booking) {
+      throw new AppError('Invalid QR code', HttpStatus.NOT_FOUND);
+    }
+
+    if (booking.status === BookingStatus.BOARDED) {
+      throw new AppError('Ticket has already been used', HttpStatus.CONFLICT);
+    }
+    if (booking.status === BookingStatus.CANCELLED) {
+      throw new AppError('Ticket has been cancelled', HttpStatus.GONE);
+    }
+    if (booking.status !== BookingStatus.CONFIRMED) {
+      throw new AppError('Ticket is not yet confirmed (payment pending)', HttpStatus.UNPROCESSABLE_ENTITY);
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (booking.tripDate < today) {
+      throw new AppError('Ticket has expired (trip date has passed)', HttpStatus.GONE);
+    }
+
+    const assignment = await this.assignmentRepo.findOne({
+      where: {
+        bus: { id: booking.schedule.bus.id },
+        conductor: { id: conductor.id },
+        isActive: true,
+      },
+    });
+    if (!assignment) {
+      throw new AppError('Conductor is not assigned to this bus', HttpStatus.FORBIDDEN);
+    }
+
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const updated = await qr.manager
+        .createQueryBuilder()
+        .update(Booking)
+        .set({ status: BookingStatus.BOARDED })
+        .where('id = :id AND status = :status', {
+          id: booking.id,
+          status: BookingStatus.CONFIRMED,
+        })
+        .execute();
+
+      if (updated.affected === 0) {
+        throw new AppError('Ticket was already scanned by another conductor', HttpStatus.CONFLICT);
+      }
+
+      await qr.commitTransaction();
+      booking.status = BookingStatus.BOARDED;
+      return this.toDto(booking);
+    } catch (err) {
+      await qr.rollbackTransaction();
+      throw err;
+    } finally {
+      await qr.release();
+    }
   }
 
   async countConfirmedSeats(

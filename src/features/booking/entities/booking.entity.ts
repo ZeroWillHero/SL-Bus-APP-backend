@@ -2,6 +2,7 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   OneToMany,
@@ -48,6 +49,10 @@ export class Booking {
     default: BookingStatus.PENDING_PAYMENT,
   })
   status!: BookingStatus;
+
+  @Index()
+  @Column({ type: 'uuid', nullable: true, unique: true })
+  ticketToken!: string | null;
 
   @OneToMany(() => BookedSeat, (bs) => bs.booking, { cascade: true })
   bookedSeats!: BookedSeat[];

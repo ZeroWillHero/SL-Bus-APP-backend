@@ -6,6 +6,7 @@ import { Bus } from './entities/bus.entity';
 import { BusDocument } from './entities/bus-document.entity';
 import { BusOwner } from '../bus-owner/entities/bus-owner.entity';
 import { BusOwnerService } from '../bus-owner/bus-owner.service';
+import { RouteService } from '../route/route.service';
 import { CreateBusDto } from './dto/create-bus.dto';
 import { UpdateBusDto } from './dto/update-bus.dto';
 import { BusDto } from './dto/bus.dto';
@@ -23,6 +24,7 @@ export class BusService {
     @InjectRepository(BusOwner)
     private readonly ownerRepo: Repository<BusOwner>,
     private readonly busOwnerService: BusOwnerService,
+    private readonly routeService: RouteService,
   ) {}
 
   // ─── BusOwner operations ────────────────────────────────────────────────────
@@ -71,7 +73,7 @@ export class BusService {
   async findOneByOwner(busId: string, ownerId: string): Promise<BusDto> {
     const bus = await this.busRepo.findOne({
       where: { id: busId, owner: { id: ownerId } },
-      relations: ['owner', 'owner.user'],
+      relations: ['owner', 'owner.user', 'routes', 'routes.bus'],
     });
     if (!bus) throw new AppError('Bus not found', HttpStatus.NOT_FOUND);
     return this.toDto(bus);
@@ -228,6 +230,7 @@ export class BusService {
       approvalStatus: bus.approvalStatus,
       rejectionReason: bus.rejectionReason,
       owner: bus.owner ? this.busOwnerService.convertToDto(bus.owner) : undefined,
+      routes: bus.routes ? bus.routes.map((r) => this.routeService.toDto(r)) : undefined,
       createdAt: bus.createdAt,
       updatedAt: bus.updatedAt,
     });

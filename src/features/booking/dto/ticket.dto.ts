@@ -66,4 +66,7 @@ export class TicketDto {
 
   @ApiProperty()
   bookedAt!: Date;
+
+  @ApiProperty({ description: 'Base64-encoded PNG QR code for conductor scanning' })
+  qrCode!: string;
 }

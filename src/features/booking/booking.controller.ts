@@ -14,6 +14,7 @@ import { CouponService } from '../coupon/coupon.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { BookingDto, SeatMapDto } from './dto/booking.dto';
 import { TicketDto } from './dto/ticket.dto';
+import { VerifyTicketDto } from './dto/verify-ticket.dto';
 import { CouponValidationDto } from '../coupon/dto/coupon.dto';
 import { BookingStatus } from './enums/booking-status.enum';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
@@ -135,11 +136,11 @@ export class BookingController {
     return new ResponseDTO(true, 'Coupon is valid', result);
   }
 
-  // ─── Conductor boarding endpoint ─────────────────────────────────────────────
+  // ─── Conductor boarding endpoints ────────────────────────────────────────────
 
   @Post('bookings/:id/board')
   @Roles('Conductor')
-  @ApiOperation({ summary: 'Mark a passenger as boarded (Conductor)' })
+  @ApiOperation({ summary: 'Mark a passenger as boarded by booking ID (Conductor)' })
   @ApiOkResponse({ type: BookingDto })
   async board(
     @Req() req: Request,
@@ -148,5 +149,18 @@ export class BookingController {
     const user = req.user as AuthenticatedUser;
     const result = await this.bookingService.board(bookingId, user.userId);
     return new ResponseDTO(true, 'Passenger boarded successfully', result);
+  }
+
+  @Post('bookings/scan')
+  @Roles('Conductor')
+  @ApiOperation({ summary: 'Scan a QR ticket token and mark passenger as boarded (Conductor)' })
+  @ApiOkResponse({ type: BookingDto })
+  async scanTicket(
+    @Req() req: Request,
+    @Body() dto: VerifyTicketDto,
+  ): Promise<ResponseDTO<BookingDto>> {
+    const user = req.user as AuthenticatedUser;
+    const result = await this.bookingService.verifyTicket(dto.token, user.userId);
+    return new ResponseDTO(true, 'Ticket verified and passenger boarded successfully', result);
   }
 }

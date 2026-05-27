@@ -29,6 +29,8 @@ import { BusDto } from './dto/bus.dto';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { BusDocumentDto } from './dto/bus-document.dto';
 import { BusAssignmentDto } from './dto/bus-assignment.dto';
+import { RouteDto } from '../route/dto/route.dto';
+import { RouteService } from '../route/route.service';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ApprovalStatus } from './enums/approval-status.enum';
@@ -44,6 +46,7 @@ export class BusController {
     private readonly busService: BusService,
     private readonly busOwnerService: BusOwnerService,
     private readonly assignmentService: AssignmentService,
+    private readonly routeService: RouteService,
   ) {}
 
   @Post()
@@ -141,6 +144,49 @@ export class BusController {
     const owner = await this.busOwnerService.findByUserId(user.userId);
     const result = await this.busService.getDocument(id, owner.id, docId);
     return new ResponseDTO(true, 'Document fetched successfully', result);
+  }
+
+  // ─── Route Assignments ────────────────────────────────────────────────────────
+
+  @Get(':id/routes')
+  @ApiOperation({ summary: 'List routes assigned to a bus (BusOwner)' })
+  @ApiOkResponse({ type: [RouteDto] })
+  async listRoutes(
+    @Req() req: Request,
+    @Param('id') id: string,
+  ): Promise<ResponseDTO<RouteDto[]>> {
+    const user = req.user as AuthenticatedUser;
+    const owner = await this.busOwnerService.findByUserId(user.userId);
+    const result = await this.routeService.findAllByBus(id, owner.id);
+    return new ResponseDTO(true, 'Routes fetched successfully', result);
+  }
+
+  @Post(':id/routes/:routeId')
+  @ApiOperation({ summary: 'Assign a route to a bus (BusOwner)' })
+  @ApiOkResponse({ type: RouteDto })
+  async assignRoute(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Param('routeId') routeId: string,
+  ): Promise<ResponseDTO<RouteDto>> {
+    const user = req.user as AuthenticatedUser;
+    const owner = await this.busOwnerService.findByUserId(user.userId);
+    const result = await this.routeService.assignToBus(routeId, id, owner.id);
+    return new ResponseDTO(true, 'Route assigned to bus successfully', result);
+  }
+
+  @Delete(':id/routes/:routeId')
+  @ApiOperation({ summary: 'Unassign a route from a bus (BusOwner)' })
+  @ApiOkResponse({ type: RouteDto })
+  async unassignRoute(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Param('routeId') routeId: string,
+  ): Promise<ResponseDTO<RouteDto>> {
+    const user = req.user as AuthenticatedUser;
+    const owner = await this.busOwnerService.findByUserId(user.userId);
+    const result = await this.routeService.unassignFromBus(routeId, id, owner.id);
+    return new ResponseDTO(true, 'Route unassigned from bus successfully', result);
   }
 
   // ─── Conductor Assignments ───────────────────────────────────────────────────
