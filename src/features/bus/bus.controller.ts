@@ -31,6 +31,7 @@ import { BusDocumentDto } from './dto/bus-document.dto';
 import { BusAssignmentDto } from './dto/bus-assignment.dto';
 import { RouteDto } from '../route/dto/route.dto';
 import { RouteService } from '../route/route.service';
+import { ConductorService } from '../conductor/conductor.service';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ApprovalStatus } from './enums/approval-status.enum';
@@ -39,7 +40,6 @@ import { BusOwnerService } from '../bus-owner/bus-owner.service';
 
 @ApiTags('Bus')
 @ApiBearerAuth()
-@Roles('BusOwner')
 @Controller('api/v1/buses')
 export class BusController {
   constructor(
@@ -47,9 +47,11 @@ export class BusController {
     private readonly busOwnerService: BusOwnerService,
     private readonly assignmentService: AssignmentService,
     private readonly routeService: RouteService,
+    private readonly conductorService: ConductorService,
   ) {}
 
   @Post()
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'Register a new bus (BusOwner)' })
   @ApiCreatedResponse({ type: BusDto })
   async create(
@@ -63,7 +65,11 @@ export class BusController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List own buses (BusOwner)' })
+  @Roles('Admin', 'BusOwner', 'Conductor')
+  @ApiOperation({
+    summary:
+      'List buses — Admin sees all, BusOwner sees own, Conductor sees assigned',
+  })
   @ApiQuery({ name: 'status', enum: ApprovalStatus, required: false })
   @ApiOkResponse({ type: [BusDto] })
   async findAll(
@@ -71,12 +77,26 @@ export class BusController {
     @Query('status') status?: ApprovalStatus,
   ): Promise<ResponseDTO<BusDto[]>> {
     const user = req.user as AuthenticatedUser;
-    const owner = await this.busOwnerService.findByUserId(user.userId);
-    const result = await this.busService.findAllByOwner(owner.id, status);
+
+    if (user.roles.includes('Admin')) {
+      const result = await this.busService.findAll(status);
+      return new ResponseDTO(true, 'Buses fetched successfully', result);
+    }
+
+    if (user.roles.includes('BusOwner')) {
+      const owner = await this.busOwnerService.findByUserId(user.userId);
+      const result = await this.busService.findAllByOwner(owner.id, status);
+      return new ResponseDTO(true, 'Buses fetched successfully', result);
+    }
+
+    // Conductor
+    const conductor = await this.conductorService.findByUserId(user.userId);
+    const result = await this.assignmentService.listBusesByConductor(conductor.id!);
     return new ResponseDTO(true, 'Buses fetched successfully', result);
   }
 
   @Get(':id')
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'Get own bus by ID (BusOwner)' })
   @ApiOkResponse({ type: BusDto })
   async findOne(
@@ -90,6 +110,7 @@ export class BusController {
   }
 
   @Patch(':id')
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'Update bus (only PENDING or REJECTED)' })
   @ApiOkResponse({ type: BusDto })
   async update(
@@ -106,6 +127,7 @@ export class BusController {
   // ─── Documents ───────────────────────────────────────────────────────────────
 
   @Post(':id/documents')
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'Upload a bus document (base64)' })
   @ApiCreatedResponse({ type: BusDocumentDto })
   async uploadDocument(
@@ -120,6 +142,7 @@ export class BusController {
   }
 
   @Get(':id/documents')
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'List bus documents (metadata only)' })
   @ApiOkResponse({ type: [BusDocumentDto] })
   async listDocuments(
@@ -133,6 +156,7 @@ export class BusController {
   }
 
   @Get(':id/documents/:docId')
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'Get single document including fileData' })
   @ApiOkResponse({ type: BusDocumentDto })
   async getDocument(
@@ -149,6 +173,7 @@ export class BusController {
   // ─── Route Assignments ────────────────────────────────────────────────────────
 
   @Get(':id/routes')
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'List routes assigned to a bus (BusOwner)' })
   @ApiOkResponse({ type: [RouteDto] })
   async listRoutes(
@@ -162,6 +187,7 @@ export class BusController {
   }
 
   @Post(':id/routes/:routeId')
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'Assign a route to a bus (BusOwner)' })
   @ApiOkResponse({ type: RouteDto })
   async assignRoute(
@@ -176,6 +202,7 @@ export class BusController {
   }
 
   @Delete(':id/routes/:routeId')
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'Unassign a route from a bus (BusOwner)' })
   @ApiOkResponse({ type: RouteDto })
   async unassignRoute(
@@ -192,6 +219,7 @@ export class BusController {
   // ─── Conductor Assignments ───────────────────────────────────────────────────
 
   @Get(':id/conductors')
+  @Roles('BusOwner')
   @ApiOperation({
     summary: 'List active conductors assigned to a bus (BusOwner)',
   })
@@ -207,6 +235,7 @@ export class BusController {
   }
 
   @Post(':id/conductors/:conductorId')
+  @Roles('BusOwner')
   @ApiOperation({ summary: 'Assign a conductor to a bus (BusOwner)' })
   @ApiCreatedResponse({ type: BusAssignmentDto })
   async assignConductor(
@@ -225,6 +254,7 @@ export class BusController {
   }
 
   @Delete(':id/conductors/:conductorId')
+  @Roles('BusOwner')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Unassign a conductor from a bus (BusOwner)' })
   @ApiNoContentResponse({ description: 'Conductor unassigned' })
