@@ -8,6 +8,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { BusOwner } from '../../bus-owner/entities/bus-owner.entity';
+import { Bus } from '../../bus/entities/bus.entity';
 
 @Entity('route')
 export class Route {
@@ -35,6 +36,10 @@ export class Route {
   @ManyToOne(() => BusOwner, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'ownerId' })
   owner!: BusOwner;
+
+  @ManyToOne(() => Bus, (bus) => bus.routes, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'busId' })
+  bus!: Bus | null;
 
   @CreateDateColumn()
   createdAt!: Date;

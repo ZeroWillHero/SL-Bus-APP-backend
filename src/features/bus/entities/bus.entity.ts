@@ -9,6 +9,7 @@ import {
 import { BusOwner } from '../../bus-owner/entities/bus-owner.entity';
 import { BusDocument } from './bus-document.entity';
 import { ApprovalStatus } from '../enums/approval-status.enum';
+import { Route } from '../../route/entities/route.entity';
 
 @Entity()
 export class Bus {
@@ -46,6 +47,9 @@ export class Bus {
 
   @OneToMany(() => BusDocument, (doc) => doc.bus, { cascade: true })
   documents!: BusDocument[];
+
+  @OneToMany(() => Route, (route) => route.bus)
+  routes!: Route[];
 
   @Column({
     type: 'timestamp',

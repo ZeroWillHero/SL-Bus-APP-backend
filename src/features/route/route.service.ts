@@ -2,6 +2,7 @@ import { HttpStatus, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Route } from './entities/route.entity';
+import { Bus } from '../bus/entities/bus.entity';
 import { BusOwner } from '../bus-owner/entities/bus-owner.entity';
 import { AppError } from '../../common/exceptions/app.exception';
 import { CreateRouteDto } from './dto/create-route.dto';
@@ -13,6 +14,8 @@ export class RouteService {
   constructor(
     @InjectRepository(Route)
     private readonly routeRepo: Repository<Route>,
+    @InjectRepository(Bus)
+    private readonly busRepo: Repository<Bus>,
     @InjectRepository(BusOwner)
     private readonly ownerRepo: Repository<BusOwner>,
   ) {}
@@ -36,7 +39,7 @@ export class RouteService {
   async findAllByOwner(ownerId: string): Promise<RouteDto[]> {
     const routes = await this.routeRepo.find({
       where: { owner: { id: ownerId } },
-      relations: ['owner'],
+      relations: ['owner', 'bus'],
     });
     return routes.map((r) => this.toDto(r));
   }
@@ -44,7 +47,7 @@ export class RouteService {
   async findOne(routeId: string, ownerId: string): Promise<RouteDto> {
     const route = await this.routeRepo.findOne({
       where: { id: routeId, owner: { id: ownerId } },
-      relations: ['owner'],
+      relations: ['owner', 'bus'],
     });
     if (!route) throw new AppError('Route not found', HttpStatus.NOT_FOUND);
     return this.toDto(route);
@@ -57,7 +60,7 @@ export class RouteService {
   ): Promise<RouteDto> {
     const route = await this.routeRepo.findOne({
       where: { id: routeId, owner: { id: ownerId } },
-      relations: ['owner'],
+      relations: ['owner', 'bus'],
     });
     if (!route) throw new AppError('Route not found', HttpStatus.NOT_FOUND);
 
@@ -77,13 +80,53 @@ export class RouteService {
   async deactivate(routeId: string, ownerId: string): Promise<RouteDto> {
     const route = await this.routeRepo.findOne({
       where: { id: routeId, owner: { id: ownerId } },
-      relations: ['owner'],
+      relations: ['owner', 'bus'],
     });
     if (!route) throw new AppError('Route not found', HttpStatus.NOT_FOUND);
 
     route.isActive = false;
     await this.routeRepo.save(route);
     return this.toDto(route);
+  }
+
+  async assignToBus(routeId: string, busId: string, ownerId: string): Promise<RouteDto> {
+    const route = await this.routeRepo.findOne({
+      where: { id: routeId, owner: { id: ownerId } },
+      relations: ['owner', 'bus'],
+    });
+    if (!route) throw new AppError('Route not found', HttpStatus.NOT_FOUND);
+
+    const bus = await this.busRepo.findOne({
+      where: { id: busId, owner: { id: ownerId } },
+    });
+    if (!bus) throw new AppError('Bus not found', HttpStatus.NOT_FOUND);
+
+    route.bus = bus;
+    await this.routeRepo.save(route);
+    return this.toDto(route);
+  }
+
+  async unassignFromBus(routeId: string, busId: string, ownerId: string): Promise<RouteDto> {
+    const route = await this.routeRepo.findOne({
+      where: { id: routeId, owner: { id: ownerId } },
+      relations: ['owner', 'bus'],
+    });
+    if (!route) throw new AppError('Route not found', HttpStatus.NOT_FOUND);
+    if (route.bus?.id !== busId) {
+      throw new AppError('Route is not assigned to this bus', HttpStatus.BAD_REQUEST);
+    }
+
+    route.bus = null;
+    await this.routeRepo.save(route);
+    return this.toDto(route);
+  }
+
+  async findAllByBus(busId: string, ownerId: string): Promise<RouteDto[]> {
+    const routes = await this.routeRepo.find({
+      where: { bus: { id: busId }, owner: { id: ownerId } },
+      relations: ['owner', 'bus'],
+    });
+    return routes.map((r) => this.toDto(r));
   }
 
   toDto(route: Route): RouteDto {
@@ -95,6 +138,7 @@ export class RouteService {
       distanceKm: Number(route.distanceKm),
       estimatedDurationMin: route.estimatedDurationMin,
       ownerId: route.owner?.id ?? '',
+      busId: route.bus?.id ?? null,
       isActive: route.isActive,
       createdAt: route.createdAt,
       updatedAt: route.updatedAt,

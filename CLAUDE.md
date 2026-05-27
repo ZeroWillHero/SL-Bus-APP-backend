@@ -36,33 +36,83 @@ Migrations are only executed on app startup when `DB_MIGRATIONS_RUN=true`. Other
 
 ## Environment
 
-PostgreSQL is required. Copy `.env.example` to `.env`. `ConfigModule` loads, in order: `.env.${NODE_ENV}.local`, `.env.${NODE_ENV}`, `.env` (or `.env.local`, `.env` when `NODE_ENV` is unset) — see `src/app.module.ts`. DB config is read directly from `process.env` in `src/database/typeorm.options.ts` (it does not use `ConfigService`), so env vars must be present in the process environment before TypeORM bootstraps.
+PostgreSQL + Redis are required. Copy `.env.example` to `.env`. `ConfigModule` loads, in order: `.env.${NODE_ENV}.local`, `.env.${NODE_ENV}`, `.env` (or `.env.local`, `.env` when `NODE_ENV` is unset) — see `src/app.module.ts`. DB config is read directly from `process.env` in `src/database/typeorm.options.ts` (it does not use `ConfigService`), so env vars must be present in the process environment before TypeORM bootstraps. Redis is used for the two-tier cache (`REDIS_*` env vars; falls back to in-memory LRU). OTP TTL is controlled by `CACHE_TTL_MS`.
 
 ## Architecture
 
 NestJS 11 + TypeORM 0.3 + PostgreSQL. Source is organised as:
 
-- `src/main.ts` — bootstraps the Nest app, mounts Swagger at `api/v1/swagger-ui`, and registers `GlobalHttpExceptionFilter` + `LoggingInterceptor` + `ResponseInterceptor` globally.
-- `src/app.module.ts` — wires feature modules and global `ConfigModule`.
-- `src/features/*` — feature modules (`auth`, `user`, `conductor`, `roles`, `databse`). Each feature owns its `*.module.ts`, `*.controller.ts`, `*.service.ts`, `dto/`, and `entity/`|`entities/`. Note: the database module lives at `src/features/databse/databse.module.ts` (misspelled); keep imports consistent until renamed.
-- `src/database/` — TypeORM `DataSource` for the CLI, shared `typeorm.options.ts` factory, and timestamp-prefixed migration files at both `src/database/*-migrations.ts` and `src/database/migrations/*.ts`. Entities are auto-discovered via the glob `**/*.entity.{ts,js}`, so new entities do not need to be registered in `typeorm.options.ts`.
-- `src/common/` — cross-cutting: `GlobalHttpExceptionFilter`, `LoggingInterceptor`, `ResponseInterceptor`, and `AppError` (extends `HttpException`).
-- `src/utils/` — shared DTOs (`ResponseDTO`, pagination) and enums (e.g. `AuthType`).
+- `src/main.ts` — bootstraps the Nest app, mounts Swagger at `/api/v1/swagger-ui`, enables CORS (configurable via `CORS_ORIGINS`), cookie-parser, and registers `GlobalHttpExceptionFilter` + `LoggingInterceptor` + `ResponseInterceptor` globally.
+- `src/app.module.ts` — wires all feature modules, global `ConfigModule`, and applies three app-wide guards: `ThrottlerGuard` (100 req/60 s), `JwtAuthGuard`, and `RolesGuard`.
+- `src/features/*` — feature modules. Each owns its `*.module.ts`, `*.controller.ts`, `*.service.ts`, `dto/`, and `entity/`|`entities/`. Note: the database module is misspelled as `src/features/databse/`; keep imports consistent until renamed.
+- `src/database/` — TypeORM `DataSource` for the CLI (`typeorm.datasource.ts`), shared `typeorm.options.ts` factory, and migrations under `src/database/migrations/*.ts`. Entities are auto-discovered via `**/*.entity.{ts,js}` — no manual registration needed.
+- `src/common/` — `GlobalHttpExceptionFilter`, `LoggingInterceptor`, `ResponseInterceptor`, `AppError`, `JwtAuthGuard`, `RolesGuard`, `@Public()` decorator, `@Roles()` decorator, and `CacheModule` setup.
+- `src/utils/` — shared DTOs (`ResponseDTO`, `PaginationDto`, `PageResponseDto`) and enums (`AuthType`, `UserType`).
+
+### Feature modules overview
+
+| Module | Key responsibility |
+|---|---|
+| `auth` | Login (bcrypt + OTP 2FA), JWT access/refresh tokens, register, `/verify` endpoint |
+| `user` | Core user CRUD; `findByEmailOrPhone` used by auth; owns `convertToDTO` |
+| `conductor` | Conductor profile (license, docs); 1:1 with User |
+| `customer` | Customer profile; 1:1 with User |
+| `bus-owner` | Bus owner profile (NIC); 1:1 with User; owns buses and routes |
+| `roles` | RBAC role definitions |
+| `user-roles` | Junction table assigning roles to users |
+| `bus` | Bus registration, approval workflow (PENDING/APPROVED/REJECTED), seat layout (JSONB), documents |
+| `route` | Route definitions (origin, destination, via-stops JSONB, distance, duration); owned by BusOwner |
+| `schedule` | Recurring trip: Bus + Route + departureTime + `operatingDays` bitmask (Sun=bit0…Sat=bit6) + baseFare |
+| `booking` | Seat selection, BookedSeat records, fare + coupon calculation, status lifecycle |
+| `payment` | Payment record linked 1:1 to Booking |
+| `coupon` | Discount codes (PERCENTAGE/FIXED_AMOUNT), usage limits, per-user caps, validity window |
+| `search` | Trip search filtered by origin/destination/date using the schedule bitmask |
+| `otp` | 6-digit OTP gen, SMS delivery via `sms` module, cache-based verification |
+| `sms` | SMS gateway integration (used exclusively by `otp`) |
+| `trip-availability` | Seat availability checks across schedules and dates |
+| `admin` | Admin utilities and DB seeding |
+
+### Data model relationships
+
+```
+User ──1:1──► Conductor
+User ──1:1──► Customer
+User ──1:1──► BusOwner
+User ──1:N──► UserRole ──N:1──► Role
+
+BusOwner ──1:N──► Bus
+BusOwner ──1:N──► Route
+Bus      ──1:N──► BusDocument
+Bus      ──1:N──► Schedule
+Schedule ──N:1──► Route
+Schedule ──1:N──► Booking
+Booking  ──N:1──► Customer
+Booking  ──1:N──► BookedSeat   (unique: scheduleId + tripDate + seatNumber)
+Booking  ──1:1──► Payment
+Booking  ──N:1──► Coupon (nullable)
+Coupon   ──1:N──► CouponUsage
+```
+
+**BookedSeat** is the seat-lock record. Its unique constraint `(scheduleId, tripDate, seatNumber)` prevents double-booking. A `Booking` also stores `seatNumbers` as a JSONB array for quick retrieval.
+
+**Schedule.operatingDays** is a smallint bitmask. To check if a schedule runs on a given JS `Date`: `(operatingDays >> date.getDay()) & 1`.
 
 ### Response and error contract
 
-Every response is normalised by `ResponseInterceptor` into `{ success, message, statusCode, data }`. The interceptor detects and passes through already-wrapped payloads, and unwraps `{ message, data }` shapes. Errors flow through `GlobalHttpExceptionFilter` and emerge as `{ success: false, message, statusCode }`. Throw `AppError(message, HttpStatus)` from services — do not return ad-hoc error objects, and do not hand-build the `ResponseDTO` unless you specifically want to override the auto-wrapping (the `ConductorController` does this).
+Every response is normalised by `ResponseInterceptor` into `{ success, message, statusCode, data }`. The interceptor detects and passes through already-wrapped payloads, and unwraps `{ message, data }` shapes. Errors flow through `GlobalHttpExceptionFilter` and emerge as `{ success: false, message, statusCode }`. Throw `AppError(message, HttpStatus)` from services — do not return ad-hoc error objects, and do not hand-build `ResponseDTO` unless you specifically want to override auto-wrapping (the `ConductorController` does this).
 
 ### Cross-feature patterns
 
-- **Transactions:** For multi-entity writes, open a `QueryRunner` from the injected `DataSource`, call `queryRunner.startTransaction()`, pass `queryRunner.manager` into collaborating services (e.g. `UserService.create(dto, manager?)` accepts an optional `EntityManager`), and always `commit`/`rollback` inside try/catch/finally with `release()`. See `ConductorService.create` for the canonical example.
-- **User ↔ Conductor:** One-to-one, owning side on `Conductor.user` with `onDelete: 'CASCADE'`. When creating a conductor, the service first checks if the `User` exists by email and branches between "attach to existing user" vs "create user + conductor in the same transaction".
-- **Password handling:** Hashing uses `bcrypt` with cost 10, done in `UserService.create`. `AuthService.login` compares with `bcrypt.compare`; JWT issuance (`generateAccessToken`/`generateRefreshToken`) is stubbed and not yet implemented.
+- **Transactions:** Open a `QueryRunner` from the injected `DataSource`, call `queryRunner.startTransaction()`, pass `queryRunner.manager` into collaborating services (services accept an optional `EntityManager`), and always `commit`/`rollback` inside try/catch/finally with `release()`. See `ConductorService.create` for the canonical example.
+- **User creation flows:** `ConductorService.create` checks whether a User with the given email exists, then either attaches to it or creates User + Conductor in the same transaction.
+- **Password handling:** Hashing uses bcrypt cost 10, done in `UserService.create`. `AuthService.login` compares with `bcrypt.compare`.
+- **Roles in JWT:** `AuthService.generateAccessToken` embeds `roles: user.userRoles?.map(ur => ur.role.name)`. `findByEmailOrPhone` must load `relations: ['userRoles', 'userRoles.role']` for this to work.
 - **DTO boundaries:** Services return DTOs (never raw entities). Conversion helpers (`convertToDTO`, `convertToEntity`) live on the services that own the entity.
+- **Auth guards:** `@Public()` bypasses `JwtAuthGuard`. `@Roles('admin')` enforces role via `RolesGuard` (reads `req.user.roles` string array set by JWT strategy).
 
 ### Swagger
 
-Available at `/api/v1/swagger-ui` when the app is running. Bearer auth is pre-configured via `DocumentBuilder.addBearerAuth()`. Decorate controllers with `@ApiTags` and DTO fields with `@ApiProperty` to keep the schema useful.
+Available at `/api/v1/swagger-ui` when the app is running. Bearer auth is pre-configured. Decorate controllers with `@ApiTags` and DTO fields with `@ApiProperty`.
 
 ## Testing notes
 

@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ApprovalStatus } from '../enums/approval-status.enum';
 import { BusOwnerDto } from '../../bus-owner/dto/bus-owner.dto';
+import { RouteDto } from '../../route/dto/route.dto';
 
 export class BusDto {
   @ApiProperty()
@@ -29,6 +30,9 @@ export class BusDto {
 
   @ApiProperty()
   owner!: BusOwnerDto;
+
+  @ApiProperty({ type: [RouteDto], required: false })
+  routes?: RouteDto[];
 
   @ApiProperty()
   createdAt!: Date;
