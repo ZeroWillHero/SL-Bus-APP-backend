@@ -1,4 +1,4 @@
-import { HttpStatus, Injectable } from '@nestjs/common';
+import { forwardRef, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AppError } from '../../common/exceptions/app.exception';
@@ -7,6 +7,7 @@ import { BusDocument } from './entities/bus-document.entity';
 import { BusOwner } from '../bus-owner/entities/bus-owner.entity';
 import { BusOwnerService } from '../bus-owner/bus-owner.service';
 import { RouteService } from '../route/route.service';
+import { ScheduleService } from '../schedule/schedule.service';
 import { CreateBusDto } from './dto/create-bus.dto';
 import { UpdateBusDto } from './dto/update-bus.dto';
 import { BusDto } from './dto/bus.dto';
@@ -25,6 +26,8 @@ export class BusService {
     private readonly ownerRepo: Repository<BusOwner>,
     private readonly busOwnerService: BusOwnerService,
     private readonly routeService: RouteService,
+    @Inject(forwardRef(() => ScheduleService))
+    private readonly scheduleService: ScheduleService,
   ) {}
 
   // ─── BusOwner operations ────────────────────────────────────────────────────
@@ -66,14 +69,14 @@ export class BusService {
   ): Promise<BusDto[]> {
     const where: Record<string, unknown> = { owner: { id: ownerId } };
     if (status) where.approvalStatus = status;
-    const buses = await this.busRepo.find({ where, relations: ['owner', 'owner.user'] });
+    const buses = await this.busRepo.find({ where, relations: ['owner', 'owner.user', 'routes', 'routes.bus', 'schedules', 'schedules.route'] });
     return buses.map((b) => this.toDto(b));
   }
 
   async findOneByOwner(busId: string, ownerId: string): Promise<BusDto> {
     const bus = await this.busRepo.findOne({
       where: { id: busId, owner: { id: ownerId } },
-      relations: ['owner', 'owner.user', 'routes', 'routes.bus'],
+      relations: ['owner', 'owner.user', 'routes', 'routes.bus', 'schedules', 'schedules.route'],
     });
     if (!bus) throw new AppError('Bus not found', HttpStatus.NOT_FOUND);
     return this.toDto(bus);
@@ -165,7 +168,7 @@ export class BusService {
 
   async findAll(status?: ApprovalStatus): Promise<BusDto[]> {
     const where = status ? { approvalStatus: status } : {};
-    const buses = await this.busRepo.find({ where, relations: ['owner', 'owner.user'] });
+    const buses = await this.busRepo.find({ where, relations: ['owner', 'owner.user', 'routes', 'routes.bus', 'schedules', 'schedules.route'] });
     return buses.map((b) => this.toDto(b));
   }
 
@@ -231,6 +234,7 @@ export class BusService {
       rejectionReason: bus.rejectionReason,
       owner: bus.owner ? this.busOwnerService.convertToDto(bus.owner) : undefined,
       routes: bus.routes ? bus.routes.map((r) => this.routeService.toDto(r)) : undefined,
+      schedules: bus.schedules ? bus.schedules.map((s) => this.scheduleService.toDto(s)) : undefined,
       createdAt: bus.createdAt,
       updatedAt: bus.updatedAt,
     });

@@ -11,6 +11,9 @@ import { UserDTO } from '../user/dto/user.dto';
 import { User } from '../user/entity/user.entity';
 import { Role } from '../roles/entities/role.entity';
 import { UserRole } from '../user-roles/entities/user-role.entity';
+import { BusOwner } from '../bus-owner/entities/bus-owner.entity';
+import { SmsService } from '../sms/sms.service';
+import * as crypto from 'crypto';
 
 @Injectable()
 export class ConductorService {
@@ -19,20 +22,18 @@ export class ConductorService {
     private datasource: DataSource,
     @InjectRepository(Conductor)
     private readonly conductorRepository: Repository<Conductor>,
+    private readonly smsService: SmsService,
   ) {}
 
-  // create conductor along with the user details in a transaction
-  async create(createConductorDto: CreateConductorDto): Promise<ConductorDTO> {
+  async create(createConductorDto: CreateConductorDto, busOwnerId?: string): Promise<ConductorDTO> {
     const queryRunner = this.datasource.createQueryRunner();
-
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
+    const generatedPassword = crypto.randomBytes(8).toString('hex');
+
     try {
-      // If user exists, verify whether a conductor is already linked before creating anything.
-      const existUser = await this.userService.getByEmail(
-        createConductorDto.email,
-      );
+      const existUser = await this.userService.getByEmail(createConductorDto.email);
 
       let existingConductor: Conductor | null = null;
       if (existUser) {
@@ -46,6 +47,10 @@ export class ConductorService {
         throw new AppError('User already exists as a conductor', 409);
       }
 
+      const busOwnerRef = busOwnerId
+        ? queryRunner.manager.create(BusOwner, { id: busOwnerId })
+        : null;
+
       if (existUser && !existingConductor) {
         const conductor = queryRunner.manager.create(Conductor, {
           firstName: createConductorDto.firstName,
@@ -53,20 +58,17 @@ export class ConductorService {
           licenseNumber: createConductorDto.licenseNumber,
           licenseExpiryDate: createConductorDto.licenseExpiryDate,
           licenseDoc: createConductorDto.licenseDoc,
-
           contactNumber: createConductorDto.contactNumber,
           user: queryRunner.manager.create(User, { id: existUser.id }),
+          busOwner: busOwnerRef,
         });
 
         const createdConductor = await queryRunner.manager.save(conductor);
         const conductorWithUser = await queryRunner.manager.findOne(Conductor, {
           where: { id: createdConductor.id },
-          relations: ['user'],
+          relations: ['user', 'busOwner'],
         });
-
-        if (!conductorWithUser) {
-          throw new AppError('Conductor not found', 404);
-        }
+        if (!conductorWithUser) throw new AppError('Conductor not found', 404);
 
         await this.ensureUserRole(queryRunner, existUser.id, 'Conductor');
         await queryRunner.commitTransaction();
@@ -76,7 +78,7 @@ export class ConductorService {
       const user = await this.userService.create(
         {
           email: createConductorDto.email,
-          password: createConductorDto.password,
+          password: generatedPassword,
           phone: createConductorDto.contactNumber,
         },
         queryRunner.manager,
@@ -90,20 +92,28 @@ export class ConductorService {
         licenseDoc: createConductorDto.licenseDoc,
         contactNumber: createConductorDto.contactNumber,
         user: queryRunner.manager.create(User, { id: user.id }),
+        busOwner: busOwnerRef,
       });
 
       const createdConductor = await queryRunner.manager.save(conductor);
       const conductorWithUser = await queryRunner.manager.findOne(Conductor, {
         where: { id: createdConductor.id },
-        relations: ['user'],
+        relations: ['user', 'busOwner'],
       });
-
-      if (!conductorWithUser) {
-        throw new AppError('Conductor not found', 404);
-      }
+      if (!conductorWithUser) throw new AppError('Conductor not found', 404);
 
       await this.ensureUserRole(queryRunner, user.id, 'Conductor');
       await queryRunner.commitTransaction();
+
+      if (busOwnerId) {
+        await this.smsService.sendSMS(
+          createConductorDto.contactNumber,
+          `Your SL Bus account has been created.\nUsername: ${createConductorDto.contactNumber}\nPassword: ${generatedPassword}\nPlease change your password after first login.`,
+        ).catch(() => {
+          // SMS failure must not roll back the registration
+        });
+      }
+
       return this.convertToDTO(conductorWithUser);
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -114,9 +124,16 @@ export class ConductorService {
   }
 
   async findAll(): Promise<ConductorDTO[]> {
-    // filters should be implemented according to the usage
     const conductors = await this.conductorRepository.find({
-      relations: ['user'],
+      relations: ['user', 'busOwner'],
+    });
+    return conductors.map((conductor) => this.convertToDTO(conductor));
+  }
+
+  async findAllByOwner(busOwnerId: string): Promise<ConductorDTO[]> {
+    const conductors = await this.conductorRepository.find({
+      where: { busOwner: { id: busOwnerId } },
+      relations: ['user', 'busOwner'],
     });
     return conductors.map((conductor) => this.convertToDTO(conductor));
   }
@@ -124,19 +141,16 @@ export class ConductorService {
   async findOne(id: string): Promise<ConductorDTO> {
     const conductor = await this.conductorRepository.findOne({
       where: { id },
-      relations: ['user'],
+      relations: ['user', 'busOwner'],
     });
-
-    if (!conductor) {
-      throw new AppError('Conductor not found', 404);
-    }
+    if (!conductor) throw new AppError('Conductor not found', 404);
     return this.convertToDTO(conductor);
   }
 
   async findByUserId(userId: string): Promise<ConductorDTO> {
     const conductor = await this.conductorRepository.findOne({
       where: { user: { id: userId } },
-      relations: ['user'],
+      relations: ['user', 'busOwner'],
     });
     if (!conductor) throw new AppError('Conductor profile not found', 404);
     return this.convertToDTO(conductor);
@@ -148,7 +162,7 @@ export class ConductorService {
   ): Promise<ConductorDTO> {
     const exist = await this.conductorRepository.findOne({
       where: { id },
-      relations: ['user'],
+      relations: ['user', 'busOwner'],
     });
     if (!exist) {
       throw new AppError('Conductor not found', 404);
@@ -169,7 +183,7 @@ export class ConductorService {
   async remove(id: string): Promise<void> {
     const exist = await this.conductorRepository.findOne({
       where: { id },
-      relations: ['user'],
+      relations: ['user', 'busOwner'],
     });
     if (!exist) {
       throw new AppError('Conductor not found', 404);
@@ -177,7 +191,6 @@ export class ConductorService {
     await this.conductorRepository.remove(exist);
   }
 
-  // essential functions for converting DTO and entity
   convertToDTO(conductor: Conductor) {
     const conductorDTO = new ConductorDTO();
     conductorDTO.id = conductor.id;
@@ -187,6 +200,7 @@ export class ConductorService {
     conductorDTO.phoneNumber = conductor.contactNumber;
     conductorDTO.email = conductor.user?.email;
     conductorDTO.user = this.convertUserToDTO(conductor.user);
+    conductorDTO.busOwnerId = conductor.busOwner?.id ?? null;
     return conductorDTO;
   }
 

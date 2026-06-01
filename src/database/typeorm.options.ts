@@ -28,10 +28,7 @@ export const getDataSourceOptions = (): DataSourceOptions => ({
   synchronize: false,
   logging: false,
   entities: [join(__dirname, '..', '**', '*.entity.{ts,js}')],
-  migrations: [
-    join(__dirname, 'migrations', '*.{ts,js}'),
-    join(__dirname, '*-migrations.{ts,js}'),
-  ],
+  migrations: [join(__dirname, 'migrations', '*.{ts,js}')],
   migrationsTableName: 'typeorm_migrations',
   migrationsRun: process.env.DB_MIGRATIONS_RUN === 'true',
   ssl: isSslEnabled()

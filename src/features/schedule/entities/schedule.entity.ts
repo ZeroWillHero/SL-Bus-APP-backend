@@ -14,7 +14,7 @@ export class Schedule {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @ManyToOne(() => Bus, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Bus, (bus) => bus.schedules, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'busId' })
   bus!: Bus;
 

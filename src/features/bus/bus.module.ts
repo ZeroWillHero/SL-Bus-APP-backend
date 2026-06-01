@@ -11,6 +11,7 @@ import { Conductor } from '../conductor/entities/conductor.entity';
 import { BusOwnerModule } from '../bus-owner/bus-owner.module';
 import { RouteModule } from '../route/route.module';
 import { ConductorModule } from '../conductor/conductor.module';
+import { ScheduleModule } from '../schedule/schedule.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ConductorModule } from '../conductor/conductor.module';
     BusOwnerModule,
     RouteModule,
     forwardRef(() => ConductorModule),
+    forwardRef(() => ScheduleModule),
   ],
   controllers: [BusController],
   providers: [BusService, AssignmentService],

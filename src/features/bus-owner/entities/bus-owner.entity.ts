@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { User } from '../../user/entity/user.entity';
 import { Bus } from '../../bus/entities/bus.entity';
+import { Conductor } from '../../conductor/entities/conductor.entity';
 
 @Entity()
 export class BusOwner {
@@ -35,4 +36,7 @@ export class BusOwner {
 
   @OneToMany(() => Bus, (bus) => bus.owner)
   buses?: Bus[];
+
+  @OneToMany(() => Conductor, (conductor) => conductor.busOwner)
+  conductors?: Conductor[];
 }
