@@ -44,4 +44,12 @@ export class ConductorDTO {
     required: true,
   })
   user?: UserDTO;
+
+  @ApiProperty({
+    description: 'ID of the bus owner who registered this conductor',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    required: false,
+    nullable: true,
+  })
+  busOwnerId?: string | null;
 }

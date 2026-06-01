@@ -2,10 +2,12 @@ import {
   Column,
   Entity,
   JoinColumn,
+  ManyToOne,
   OneToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { User } from '../../user/entity/user.entity';
+import { BusOwner } from '../../bus-owner/entities/bus-owner.entity';
 
 @Entity()
 export class Conductor {
@@ -39,4 +41,8 @@ export class Conductor {
   @OneToOne(() => User, (user) => user.conductor, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user!: User;
+
+  @ManyToOne(() => BusOwner, (owner) => owner.conductors, { nullable: true, onDelete: 'SET NULL' })
+  @JoinColumn({ name: 'busOwnerId' })
+  busOwner!: BusOwner | null;
 }

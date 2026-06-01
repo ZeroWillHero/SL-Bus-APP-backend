@@ -42,9 +42,17 @@ export class AssignmentService {
 
     const conductor = await this.conductorRepo.findOne({
       where: { id: conductorId },
+      relations: ['busOwner'],
     });
     if (!conductor)
       throw new AppError('Conductor not found', HttpStatus.NOT_FOUND);
+
+    if (conductor.busOwner?.id && conductor.busOwner.id !== ownerId) {
+      throw new AppError(
+        'Conductor does not belong to your account',
+        HttpStatus.FORBIDDEN,
+      );
+    }
 
     const existing = await this.assignmentRepo.findOne({
       where: { bus: { id: busId }, conductor: { id: conductorId } },
