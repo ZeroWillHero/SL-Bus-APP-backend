@@ -18,7 +18,7 @@ import { TripAvailabilityService } from '../trip-availability/trip-availability.
     BusOwnerModule,
     RouteModule,
     forwardRef(() => BusModule),
-    ConductorModule,
+    forwardRef(() => ConductorModule),
   ],
   controllers: [ScheduleController],
   providers: [ScheduleService, TripAvailabilityService],

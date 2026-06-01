@@ -115,7 +115,7 @@ export class AssignmentService {
   async listBusesByConductor(conductorId: string): Promise<BusDto[]> {
     const assignments = await this.assignmentRepo.find({
       where: { conductor: { id: conductorId }, isActive: true },
-      relations: ['bus', 'bus.owner', 'bus.owner.user', 'bus.routes'],
+      relations: ['bus', 'bus.owner', 'bus.owner.user', 'bus.routes', 'bus.routes.bus', 'bus.schedules', 'bus.schedules.route'],
     });
     return assignments.map((a) => this.busService.toDto(a.bus));
   }

@@ -10,6 +10,7 @@ import { BusOwner } from '../../bus-owner/entities/bus-owner.entity';
 import { BusDocument } from './bus-document.entity';
 import { ApprovalStatus } from '../enums/approval-status.enum';
 import { Route } from '../../route/entities/route.entity';
+import { Schedule } from '../../schedule/entities/schedule.entity';
 
 @Entity()
 export class Bus {
@@ -50,6 +51,9 @@ export class Bus {
 
   @OneToMany(() => Route, (route) => route.bus)
   routes!: Route[];
+
+  @OneToMany(() => Schedule, (schedule) => schedule.bus)
+  schedules!: Schedule[];
 
   @Column({
     type: 'timestamp',
