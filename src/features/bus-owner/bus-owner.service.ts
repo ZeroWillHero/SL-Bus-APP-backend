@@ -10,6 +10,7 @@ import { BusOwner } from './entities/bus-owner.entity';
 import { CreateBusOwnerDto } from './dto/create-bus-owner.dto';
 import { UpdateBusOwnerDto } from './dto/update-bus-owner.dto';
 import { BusOwnerDto } from './dto/bus-owner.dto';
+import { ApprovalStatus } from '../bus/enums/approval-status.enum';
 import { BusOwnerPageDto } from './dto/bus-owner-page.dto';
 import { UserDTO } from '../user/dto/user.dto';
 import { Bus } from '../bus/entities/bus.entity';
@@ -179,6 +180,44 @@ export class BusOwnerService {
     return this.convertToDto(owner);
   }
 
+  async findById(busOwnerId: string): Promise<BusOwnerDto> {
+    const owner = await this.busOwnerRepo.findOne({
+      where: { id: busOwnerId },
+      relations: ['user', 'buses'],
+    });
+    if (!owner) throw new AppError('Bus owner not found', HttpStatus.NOT_FOUND);
+    return this.convertToDto(owner);
+  }
+
+  async approve(busOwnerId: string): Promise<BusOwnerDto> {
+    const owner = await this.busOwnerRepo.findOne({
+      where: { id: busOwnerId },
+      relations: ['user', 'buses'],
+    });
+    if (!owner) throw new AppError('Bus owner not found', HttpStatus.NOT_FOUND);
+
+    owner.approvalStatus = ApprovalStatus.APPROVED;
+    owner.rejectionReason = null;
+    await this.busOwnerRepo.save(owner);
+    return this.convertToDto(owner);
+  }
+
+  async reject(busOwnerId: string, reason: string): Promise<BusOwnerDto> {
+    if (!reason?.trim()) {
+      throw new AppError('Rejection reason is required', HttpStatus.BAD_REQUEST);
+    }
+    const owner = await this.busOwnerRepo.findOne({
+      where: { id: busOwnerId },
+      relations: ['user', 'buses'],
+    });
+    if (!owner) throw new AppError('Bus owner not found', HttpStatus.NOT_FOUND);
+
+    owner.approvalStatus = ApprovalStatus.REJECTED;
+    owner.rejectionReason = reason.trim();
+    await this.busOwnerRepo.save(owner);
+    return this.convertToDto(owner);
+  }
+
   async update(
     busOwnerId: string,
     dto: UpdateBusOwnerDto,
@@ -208,6 +247,8 @@ export class BusOwnerService {
       contactNumber: owner.contactNumber,
       nicNumber: owner.nicNumber,
       address: owner.address,
+      approvalStatus: owner.approvalStatus ?? ApprovalStatus.PENDING,
+      rejectionReason: owner.rejectionReason ?? null,
       user: owner.user ? this.convertUserToDto(owner.user) : undefined,
       buses: owner.buses ? owner.buses.map((b) => this.convertBusToDto(b)) : undefined,
     };
@@ -219,6 +260,7 @@ export class BusOwnerService {
       email: user.email,
       phone: user.phone,
       isVerified: user.isVerified,
+      isBanned: user.isBanned ?? false,
       roles: user.userRoles?.map((ur) => ur.role.name).filter((n): n is string => !!n) ?? [],
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

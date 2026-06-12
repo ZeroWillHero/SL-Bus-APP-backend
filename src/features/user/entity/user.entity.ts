@@ -35,6 +35,12 @@ export class User {
   })
   isVerified!: boolean;
 
+  @Column({
+    type: Boolean,
+    default: false,
+  })
+  isBanned!: boolean;
+
   @OneToOne(() => Conductor, (conductor) => conductor.user)
   conductor?: Conductor;
 

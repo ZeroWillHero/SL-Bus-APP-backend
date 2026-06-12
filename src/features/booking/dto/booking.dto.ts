@@ -5,8 +5,14 @@ export class BookingDto {
   @ApiProperty()
   id!: string;
 
-  @ApiProperty()
-  customerId!: string;
+  @ApiProperty({ nullable: true })
+  customerId!: string | null;
+
+  @ApiProperty({ nullable: true, description: 'Set for cash/walk-in bookings' })
+  passengerName!: string | null;
+
+  @ApiProperty({ nullable: true, description: 'Set for cash/walk-in bookings' })
+  passengerPhone!: string | null;
 
   @ApiProperty()
   scheduleId!: string;

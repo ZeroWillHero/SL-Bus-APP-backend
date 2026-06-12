@@ -28,6 +28,12 @@ export class UserDTO {
   isVerified!: boolean;
 
   @ApiProperty({
+    description: 'Indicates whether the user is banned by an admin',
+    example: false,
+  })
+  isBanned!: boolean;
+
+  @ApiProperty({
     description: 'Roles assigned to the user',
     example: ['admin', 'customer'],
   })

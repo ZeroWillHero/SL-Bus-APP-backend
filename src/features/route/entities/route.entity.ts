@@ -4,11 +4,13 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { BusOwner } from '../../bus-owner/entities/bus-owner.entity';
 import { Bus } from '../../bus/entities/bus.entity';
+import { RouteStop } from './route-stop.entity';
 
 @Entity('route')
 export class Route {
@@ -20,9 +22,6 @@ export class Route {
 
   @Column()
   destination!: string;
-
-  @Column({ type: 'jsonb', default: [] })
-  viaStops!: string[];
 
   @Column({ type: 'decimal', precision: 7, scale: 2 })
   distanceKm!: number;
@@ -40,6 +39,9 @@ export class Route {
   @ManyToOne(() => Bus, (bus) => bus.routes, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'busId' })
   bus!: Bus | null;
+
+  @OneToMany(() => RouteStop, (stop) => stop.route, { cascade: true })
+  stops!: RouteStop[];
 
   @CreateDateColumn()
   createdAt!: Date;

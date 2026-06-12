@@ -12,6 +12,7 @@ import { BookingService } from './booking.service';
 import { CustomerService } from '../customer/customer.service';
 import { CouponService } from '../coupon/coupon.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { CreateCashBookingDto } from './dto/create-cash-booking.dto';
 import { BookingDto, SeatMapDto } from './dto/booking.dto';
 import { TicketDto } from './dto/ticket.dto';
 import { VerifyTicketDto } from './dto/verify-ticket.dto';
@@ -136,7 +137,20 @@ export class BookingController {
     return new ResponseDTO(true, 'Coupon is valid', result);
   }
 
-  // ─── Conductor boarding endpoints ────────────────────────────────────────────
+  // ─── Conductor boarding and cash ticket endpoints ────────────────────────────
+
+  @Post('bookings/cash')
+  @Roles('Conductor')
+  @ApiOperation({ summary: 'Create a cash/walk-in booking and mark immediately as CONFIRMED (Conductor)' })
+  @ApiCreatedResponse({ type: BookingDto })
+  async createCashBooking(
+    @Req() req: Request,
+    @Body() dto: CreateCashBookingDto,
+  ): Promise<ResponseDTO<BookingDto>> {
+    const user = req.user as AuthenticatedUser;
+    const result = await this.bookingService.createCashBooking(user.userId, dto);
+    return new ResponseDTO(true, 'Cash booking created successfully', result);
+  }
 
   @Post('bookings/:id/board')
   @Roles('Conductor')

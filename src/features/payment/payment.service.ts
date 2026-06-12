@@ -84,7 +84,7 @@ export class PaymentService {
       where: { id: paymentId },
       relations: ['booking', 'booking.customer'],
     });
-    if (!payment || payment.booking.customer.id !== customerId) {
+    if (!payment || payment.booking.customer?.id !== customerId) {
       throw new AppError('Payment not found', HttpStatus.NOT_FOUND);
     }
     return this.toDto(payment);

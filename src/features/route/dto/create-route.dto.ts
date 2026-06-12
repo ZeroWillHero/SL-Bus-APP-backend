@@ -7,13 +7,6 @@ export class CreateRouteDto {
   @ApiProperty({ example: 'Kandy' })
   destination!: string;
 
-  @ApiProperty({
-    example: ['Kadawatha', 'Warakapola'],
-    required: false,
-    type: [String],
-  })
-  viaStops?: string[];
-
   @ApiProperty({ example: 115.5 })
   distanceKm!: number;
 

@@ -220,6 +220,24 @@ export class BusService {
     return docs.map((d) => this.toDocDto(d, false));
   }
 
+  async verifyDocument(busId: string, docId: string, adminUserId: string): Promise<BusDocumentDto> {
+    const doc = await this.docRepo.findOne({
+      where: { id: docId, bus: { id: busId } },
+    });
+    if (!doc) throw new AppError('Document not found', HttpStatus.NOT_FOUND);
+
+    doc.verifiedAt = new Date();
+    doc.verifiedByAdminId = adminUserId;
+    await this.docRepo.save(doc);
+    return this.toDocDto(doc, false);
+  }
+
+  async deleteBus(busId: string): Promise<void> {
+    const bus = await this.busRepo.findOne({ where: { id: busId } });
+    if (!bus) throw new AppError('Bus not found', HttpStatus.NOT_FOUND);
+    await this.busRepo.remove(bus);
+  }
+
   // ─── Converters ──────────────────────────────────────────────────────────────
 
   toDto(bus: Bus): BusDto {
