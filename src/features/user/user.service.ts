@@ -13,7 +13,7 @@ export class UserService {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
-  ) { }
+  ) {}
 
   async create(data: CreateUserDTO, manager?: EntityManager): Promise<UserDTO> {
     const repo = manager ? manager.getRepository(User) : this.userRepository;
@@ -38,10 +38,9 @@ export class UserService {
       .leftJoinAndSelect('userRoles.role', 'role');
 
     if (filters?.search) {
-      query.andWhere(
-        'user.email ILIKE :search OR user.phone ILIKE :search',
-        { search: `%${filters.search}%` },
-      );
+      query.andWhere('user.email ILIKE :search OR user.phone ILIKE :search', {
+        search: `%${filters.search}%`,
+      });
     }
 
     if (filters?.email) {
@@ -143,22 +142,22 @@ export class UserService {
 
   private async getUserByPhone(phone: string): Promise<User> {
     const user = await this.userRepository.findOneBy({
-      phone
+      phone,
     });
 
     if (!user) {
-      throw new AppError("User not found", HttpStatus.NOT_FOUND);
+      throw new AppError('User not found', HttpStatus.NOT_FOUND);
     }
 
     return user;
   }
 
   // verify user
-  async verifyUser(phone: string, otp: String) {
+  async verifyUser(phone: string, otp: string) {
     const user = await this.getUserByPhone(phone);
 
     if (user.isVerified) {
-      throw new AppError("User already verified", HttpStatus.BAD_REQUEST);
+      throw new AppError('User already verified', HttpStatus.BAD_REQUEST);
     }
 
     user.isVerified = true;
@@ -172,7 +171,10 @@ export class UserService {
       phone: user.phone,
       isVerified: user.isVerified,
       isBanned: user.isBanned ?? false,
-      roles: user.userRoles?.map((ur) => ur.role.name).filter((n): n is string => !!n) ?? [],
+      roles:
+        user.userRoles
+          ?.map((ur) => ur.role.name)
+          .filter((n): n is string => !!n) ?? [],
       profilePicture: user.profilePicture,
       conductor: user.conductor,
       createdAt: user.createdAt,

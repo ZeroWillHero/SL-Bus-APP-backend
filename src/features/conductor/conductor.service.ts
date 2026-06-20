@@ -25,7 +25,10 @@ export class ConductorService {
     private readonly smsService: SmsService,
   ) {}
 
-  async create(createConductorDto: CreateConductorDto, busOwnerId?: string): Promise<ConductorDTO> {
+  async create(
+    createConductorDto: CreateConductorDto,
+    busOwnerId?: string,
+  ): Promise<ConductorDTO> {
     const queryRunner = this.datasource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -33,7 +36,9 @@ export class ConductorService {
     const generatedPassword = crypto.randomBytes(8).toString('hex');
 
     try {
-      const existUser = await this.userService.getByEmail(createConductorDto.email);
+      const existUser = await this.userService.getByEmail(
+        createConductorDto.email,
+      );
 
       let existingConductor: Conductor | null = null;
       if (existUser) {
@@ -106,12 +111,14 @@ export class ConductorService {
       await queryRunner.commitTransaction();
 
       if (busOwnerId) {
-        await this.smsService.sendSMS(
-          createConductorDto.contactNumber,
-          `Your SL Bus account has been created.\nUsername: ${createConductorDto.contactNumber}\nPassword: ${generatedPassword}\nPlease change your password after first login.`,
-        ).catch(() => {
-          // SMS failure must not roll back the registration
-        });
+        await this.smsService
+          .sendSMS(
+            createConductorDto.contactNumber,
+            `Your SL Bus account has been created.\nUsername: ${createConductorDto.contactNumber}\nPassword: ${generatedPassword}\nPlease change your password after first login.`,
+          )
+          .catch(() => {
+            // SMS failure must not roll back the registration
+          });
       }
 
       return this.convertToDTO(conductorWithUser);
@@ -231,7 +238,10 @@ export class ConductorService {
       phone: user.phone,
       isVerified: user.isVerified,
       isBanned: user.isBanned ?? false,
-      roles: user.userRoles?.map((ur) => ur.role.name).filter((n): n is string => !!n) ?? [],
+      roles:
+        user.userRoles
+          ?.map((ur) => ur.role.name)
+          .filter((n): n is string => !!n) ?? [],
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
       conductor: user.conductor,
