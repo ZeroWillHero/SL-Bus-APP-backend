@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 
@@ -6,6 +6,7 @@ export interface JwtPayload {
   sub: string;
   email: string;
   roles: string[];
+  isBanned?: boolean;
 }
 
 export interface AuthenticatedUser {
@@ -25,6 +26,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   validate(payload: JwtPayload): AuthenticatedUser {
+    if (payload.isBanned) {
+      throw new ForbiddenException('Account is banned. Contact support.');
+    }
     return {
       userId: payload.sub,
       email: payload.email,

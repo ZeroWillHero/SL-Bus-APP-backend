@@ -35,6 +35,15 @@ export class User {
   })
   isVerified!: boolean;
 
+  @Column({
+    type: Boolean,
+    default: false,
+  })
+  isBanned!: boolean;
+
+  @Column({ type: 'varchar', nullable: true })
+  profilePicture!: string | null;
+
   @OneToOne(() => Conductor, (conductor) => conductor.user)
   conductor?: Conductor;
 

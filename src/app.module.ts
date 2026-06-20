@@ -23,6 +23,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { OtpModule } from './features/otp/otp.module';
 import { SmsModule } from './features/sms/sms.module';
+import { FileModule } from './features/file/file.module';
 
 const envFilePath = process.env.NODE_ENV
   ? [
@@ -55,6 +56,7 @@ const envFilePath = process.env.NODE_ENV
     CouponModule,
     OtpModule,
     SmsModule,
+    FileModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

@@ -32,11 +32,14 @@ export class UserService {
 
   // getAll users
   async getAll(filters?: UserFiltersDTO): Promise<UserDTO[]> {
-    const query = this.userRepository.createQueryBuilder('user');
+    const query = this.userRepository
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.userRoles', 'userRoles')
+      .leftJoinAndSelect('userRoles.role', 'role');
 
     if (filters?.search) {
       query.andWhere(
-        'user.username ILIKE :search OR user.email ILIKE :search OR user.phone ILIKE :search',
+        'user.email ILIKE :search OR user.phone ILIKE :search',
         { search: `%${filters.search}%` },
       );
     }
@@ -105,6 +108,28 @@ export class UserService {
     });
   }
 
+  async banUser(userId: string): Promise<UserDTO> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['userRoles', 'userRoles.role'],
+    });
+    if (!user) throw new AppError('User not found', HttpStatus.NOT_FOUND);
+    user.isBanned = true;
+    await this.userRepository.save(user);
+    return this.convertToDTO(user);
+  }
+
+  async unbanUser(userId: string): Promise<UserDTO> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      relations: ['userRoles', 'userRoles.role'],
+    });
+    if (!user) throw new AppError('User not found', HttpStatus.NOT_FOUND);
+    user.isBanned = false;
+    await this.userRepository.save(user);
+    return this.convertToDTO(user);
+  }
+
   // DELETE user by id
   async delete(id: string): Promise<void> {
     const user = await this.userRepository.findOne({ where: { id } });
@@ -146,7 +171,9 @@ export class UserService {
       email: user.email ?? '',
       phone: user.phone,
       isVerified: user.isVerified,
+      isBanned: user.isBanned ?? false,
       roles: user.userRoles?.map((ur) => ur.role.name).filter((n): n is string => !!n) ?? [],
+      profilePicture: user.profilePicture,
       conductor: user.conductor,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -156,10 +183,12 @@ export class UserService {
   convertToEntity(dto: UserDTO): User {
     return {
       id: dto.id,
-      password: '', // Password should be handled separately and securely
+      password: '',
       email: dto.email,
       phone: dto.phone!,
       isVerified: dto.isVerified,
+      isBanned: dto.isBanned ?? false,
+      profilePicture: dto.profilePicture ?? null,
       createdAt: dto.createdAt,
       updatedAt: dto.updatedAt,
       conductor: dto.conductor,

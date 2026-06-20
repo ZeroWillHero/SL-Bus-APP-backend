@@ -5,6 +5,8 @@ import { Schedule } from '../schedule/entities/schedule.entity';
 import { SearchResultDto, SearchPageDto } from './dto/search-result.dto';
 import { ApprovalStatus } from '../bus/enums/approval-status.enum';
 import { BookingService } from '../booking/booking.service';
+import { RouteStopDto } from '../route/dto/route-stop.dto';
+import { RouteStop } from '../route/entities/route-stop.entity';
 
 const DAY_BITS = [
   1 << 0, // 0 = Sunday
@@ -22,6 +24,16 @@ function addMinutes(time: string, minutes: number): string {
   const rh = Math.floor(total / 60);
   const rm = total % 60;
   return `${String(rh).padStart(2, '0')}:${String(rm).padStart(2, '0')}`;
+}
+
+function toStopDto(stop: RouteStop): RouteStopDto {
+  return {
+    id: stop.id,
+    stopName: stop.stopName,
+    stopOrder: stop.stopOrder,
+    priceFromOrigin: Number(stop.priceFromOrigin),
+    createdAt: stop.createdAt,
+  };
 }
 
 @Injectable()
@@ -55,6 +67,7 @@ export class SearchService {
       .innerJoinAndSelect('s.bus', 'bus')
       .innerJoinAndSelect('bus.owner', 'owner')
       .innerJoinAndSelect('s.route', 'route')
+      .leftJoinAndSelect('route.stops', 'stops')
       .leftJoinAndSelect(
         'trip_availability',
         'ta',
@@ -89,6 +102,9 @@ export class SearchService {
           s.id,
           date,
         );
+        const sortedStops = (s.route.stops ?? []).sort(
+          (a, b) => a.stopOrder - b.stopOrder,
+        );
         return {
           scheduleId: s.id,
           busId: s.bus.id,
@@ -97,7 +113,8 @@ export class SearchService {
           operatorName: `${s.bus.owner.firstName} ${s.bus.owner.lastName}`,
           origin: s.route.origin,
           destination: s.route.destination,
-          viaStops: s.route.viaStops,
+          viaStops: sortedStops.map((st) => st.stopName),
+          stops: sortedStops.map(toStopDto),
           distanceKm: Number(s.route.distanceKm),
           estimatedDurationMin: s.route.estimatedDurationMin,
           departureTime: departureHHMM,

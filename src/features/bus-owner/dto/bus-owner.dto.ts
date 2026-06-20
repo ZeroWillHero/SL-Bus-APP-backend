@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { UserDTO } from '../../user/dto/user.dto';
 import { BusDto } from '../../bus/dto/bus.dto';
+import { ApprovalStatus } from '../../bus/enums/approval-status.enum';
 
 export class BusOwnerDto {
   @ApiProperty({ example: 'uuid' })
@@ -20,6 +21,12 @@ export class BusOwnerDto {
 
   @ApiProperty({ example: '42 Galle Road, Colombo 03' })
   address!: string;
+
+  @ApiProperty({ enum: ApprovalStatus })
+  approvalStatus!: ApprovalStatus;
+
+  @ApiProperty({ nullable: true })
+  rejectionReason!: string | null;
 
   @ApiProperty({ required: false })
   user?: UserDTO;

@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Patch,
   Post,
@@ -12,6 +14,7 @@ import type { Request } from 'express';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
@@ -21,6 +24,9 @@ import { BusOwnerService } from '../bus-owner/bus-owner.service';
 import { CreateRouteDto } from './dto/create-route.dto';
 import { UpdateRouteDto } from './dto/update-route.dto';
 import { RouteDto } from './dto/route.dto';
+import { RouteStopDto } from './dto/route-stop.dto';
+import { CreateRouteStopDto } from './dto/create-route-stop.dto';
+import { UpdateRouteStopDto } from './dto/update-route-stop.dto';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
@@ -34,6 +40,8 @@ export class RouteController {
     private readonly routeService: RouteService,
     private readonly busOwnerService: BusOwnerService,
   ) {}
+
+  // ─── Route CRUD ──────────────────────────────────────────────────────────────
 
   @Post()
   @ApiOperation({ summary: 'Create a route (BusOwner)' })
@@ -96,5 +104,64 @@ export class RouteController {
     const owner = await this.busOwnerService.findByUserId(user.userId);
     const result = await this.routeService.deactivate(id, owner.id);
     return new ResponseDTO(true, 'Route deactivated successfully', result);
+  }
+
+  // ─── Stop management ─────────────────────────────────────────────────────────
+
+  @Post(':id/stops')
+  @ApiOperation({ summary: 'Add a stop to a route (BusOwner)' })
+  @ApiCreatedResponse({ type: RouteStopDto })
+  async addStop(
+    @Req() req: Request,
+    @Param('id') routeId: string,
+    @Body() dto: CreateRouteStopDto,
+  ): Promise<ResponseDTO<RouteStopDto>> {
+    const user = req.user as AuthenticatedUser;
+    const owner = await this.busOwnerService.findByUserId(user.userId);
+    const result = await this.routeService.addStop(routeId, owner.id, dto);
+    return new ResponseDTO(true, 'Stop added successfully', result);
+  }
+
+  @Get(':id/stops')
+  @ApiOperation({ summary: 'List stops for a route (BusOwner)' })
+  @ApiOkResponse({ type: [RouteStopDto] })
+  async getStops(
+    @Req() req: Request,
+    @Param('id') routeId: string,
+  ): Promise<ResponseDTO<RouteStopDto[]>> {
+    const user = req.user as AuthenticatedUser;
+    const owner = await this.busOwnerService.findByUserId(user.userId);
+    const result = await this.routeService.getStops(routeId, owner.id);
+    return new ResponseDTO(true, 'Stops fetched successfully', result);
+  }
+
+  @Patch(':id/stops/:stopId')
+  @ApiOperation({ summary: 'Update a stop (BusOwner)' })
+  @ApiOkResponse({ type: RouteStopDto })
+  async updateStop(
+    @Req() req: Request,
+    @Param('id') routeId: string,
+    @Param('stopId') stopId: string,
+    @Body() dto: UpdateRouteStopDto,
+  ): Promise<ResponseDTO<RouteStopDto>> {
+    const user = req.user as AuthenticatedUser;
+    const owner = await this.busOwnerService.findByUserId(user.userId);
+    const result = await this.routeService.updateStop(routeId, stopId, owner.id, dto);
+    return new ResponseDTO(true, 'Stop updated successfully', result);
+  }
+
+  @Delete(':id/stops/:stopId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove a stop from a route (BusOwner)' })
+  @ApiNoContentResponse()
+  async removeStop(
+    @Req() req: Request,
+    @Param('id') routeId: string,
+    @Param('stopId') stopId: string,
+  ): Promise<ResponseDTO<null>> {
+    const user = req.user as AuthenticatedUser;
+    const owner = await this.busOwnerService.findByUserId(user.userId);
+    await this.routeService.removeStop(routeId, stopId, owner.id);
+    return new ResponseDTO(true, 'Stop removed successfully', null);
   }
 }

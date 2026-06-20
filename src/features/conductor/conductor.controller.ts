@@ -27,7 +27,7 @@ import { BusDto } from '../bus/dto/bus.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 
-@Controller('api/v1/conductor')
+@Controller(['api/v1/conductor', 'api/v1/conductors'])
 @ApiTags('Conductor')
 @ApiBearerAuth()
 export class ConductorController {

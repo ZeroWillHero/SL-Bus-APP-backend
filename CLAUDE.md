@@ -49,7 +49,7 @@ NestJS 11 + TypeORM 0.3 + PostgreSQL. Source is organised as:
 
 - `src/main.ts` — bootstraps the Nest app, mounts Swagger at `/api/v1/swagger-ui`, enables CORS (configurable via `CORS_ORIGINS`), cookie-parser, and registers `GlobalHttpExceptionFilter` + `LoggingInterceptor` + `ResponseInterceptor` globally.
 - `src/app.module.ts` — wires all feature modules, global `ConfigModule`, and applies three app-wide guards: `ThrottlerGuard` (100 req/60 s), `JwtAuthGuard`, and `RolesGuard`.
-- `src/features/*` — feature modules. Each owns its `*.module.ts`, `*.controller.ts`, `*.service.ts`, `dto/`, and `entity/`|`entities/`. Note: the database module is misspelled as `src/features/databse/`; keep imports consistent until renamed.
+- `src/features/*` — feature modules. Each owns its `*.module.ts`, `*.controller.ts`, `*.service.ts`, `dto/`, and `entity/`|`entities/`.
 - `src/database/` — TypeORM `DataSource` for the CLI (`typeorm.datasource.ts`), shared `typeorm.options.ts` factory, and migrations under `src/database/migrations/*.ts`. Entities are auto-discovered via `**/*.entity.{ts,js}` — no manual registration needed.
 - `src/common/` — `GlobalHttpExceptionFilter`, `LoggingInterceptor`, `ResponseInterceptor`, `AppError`, `JwtAuthGuard`, `RolesGuard`, `@Public()` decorator, `@Roles()` decorator, and `CacheModule` setup.
 - `src/utils/` — shared DTOs (`ResponseDTO`, `PaginationDto`, `PageResponseDto`) and enums (`AuthType`, `UserType`).

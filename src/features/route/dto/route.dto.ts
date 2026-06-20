@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { RouteStopDto } from './route-stop.dto';
 
 export class RouteDto {
   @ApiProperty()
@@ -10,8 +11,11 @@ export class RouteDto {
   @ApiProperty()
   destination!: string;
 
-  @ApiProperty({ type: [String] })
+  @ApiProperty({ type: [String], description: 'Derived from stops ordered by stopOrder' })
   viaStops!: string[];
+
+  @ApiProperty({ type: [RouteStopDto] })
+  stops!: RouteStopDto[];
 
   @ApiProperty()
   distanceKm!: number;

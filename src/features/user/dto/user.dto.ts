@@ -28,6 +28,12 @@ export class UserDTO {
   isVerified!: boolean;
 
   @ApiProperty({
+    description: 'Indicates whether the user is banned by an admin',
+    example: false,
+  })
+  isBanned!: boolean;
+
+  @ApiProperty({
     description: 'Roles assigned to the user',
     example: ['admin', 'customer'],
   })
@@ -44,6 +50,13 @@ export class UserDTO {
     example: '2023-01-02T00:00:00.000Z',
   })
   updatedAt!: Date;
+
+  @ApiProperty({
+    description: 'Profile picture relative path or URL',
+    required: false,
+    nullable: true,
+  })
+  profilePicture?: string | null;
 
   @ApiProperty({
     description: 'conductor details if the user is a conductor',

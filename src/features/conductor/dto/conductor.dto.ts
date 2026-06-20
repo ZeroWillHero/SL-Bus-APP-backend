@@ -24,7 +24,7 @@ export class ConductorDTO {
     description: 'The license number of the conductor',
     example: 'ABC123456',
   })
-  licenseNumber?: string;
+  licenseNumber?: string | null;
 
   @ApiProperty({
     description: 'The phone number of the conductor',

@@ -19,9 +19,15 @@ export class Booking {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
 
-  @ManyToOne(() => Customer, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Customer, { nullable: true, onDelete: 'SET NULL' })
   @JoinColumn({ name: 'customerId' })
-  customer!: Customer;
+  customer!: Customer | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  passengerName!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  passengerPhone!: string | null;
 
   @ManyToOne(() => Schedule, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'scheduleId' })

@@ -20,14 +20,14 @@ export class Conductor {
   @Column()
   lastName!: string;
 
-  @Column()
-  licenseNumber!: string;
+  @Column({ nullable: true, type: 'varchar' })
+  licenseNumber!: string | null;
 
-  @Column()
-  licenseExpiryDate!: Date;
+  @Column({ nullable: true, type: 'date' })
+  licenseExpiryDate!: Date | null;
 
-  @Column()
-  licenseDoc!: string;
+  @Column({ nullable: true, type: 'text' })
+  licenseDoc!: string | null;
 
   @Column()
   contactNumber!: string;
@@ -38,11 +38,17 @@ export class Conductor {
   })
   isLicenseVerified!: boolean;
 
-  @OneToOne(() => User, (user) => user.conductor, { onDelete: 'CASCADE' })
+  @OneToOne(() => User, (user) => user.conductor, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   @JoinColumn({ name: 'userId' })
-  user!: User;
+  user!: User | null;
 
-  @ManyToOne(() => BusOwner, (owner) => owner.conductors, { nullable: true, onDelete: 'SET NULL' })
+  @ManyToOne(() => BusOwner, (owner) => owner.conductors, {
+    nullable: true,
+    onDelete: 'SET NULL',
+  })
   @JoinColumn({ name: 'busOwnerId' })
   busOwner!: BusOwner | null;
 }

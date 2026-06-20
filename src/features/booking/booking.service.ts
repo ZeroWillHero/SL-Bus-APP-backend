@@ -19,6 +19,8 @@ import { PaymentStatus } from '../payment/enums/payment-status.enum';
 import { BookingDto, SeatMapDto, SeatStatusDto } from './dto/booking.dto';
 import { TicketDto } from './dto/ticket.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
+import { CreateCashBookingDto } from './dto/create-cash-booking.dto';
+import { PaymentMethod } from '../payment/enums/payment-method.enum';
 
 interface SeatDef {
   seatNumber: string;
@@ -337,6 +339,7 @@ export class BookingService {
         'schedule',
         'schedule.bus',
         'schedule.route',
+        'schedule.route.stops',
         'coupon',
       ],
     });
@@ -367,10 +370,14 @@ export class BookingService {
       bookingId: booking.id,
       ticketRef: `TKT-${booking.id.substring(0, 8).toUpperCase()}`,
       status: booking.status,
-      customerName: `${customer.firstName} ${customer.lastName}`,
+      customerName: customer
+        ? `${customer.firstName} ${customer.lastName}`
+        : booking.passengerName ?? 'Walk-in Passenger',
       origin: route.origin,
       destination: route.destination,
-      viaStops: route.viaStops ?? [],
+      viaStops: (route.stops ?? [])
+        .sort((a, b) => a.stopOrder - b.stopOrder)
+        .map((s) => s.stopName),
       departureTime: deptHHMM,
       tripDate: booking.tripDate,
       estimatedArrival: addMinutes(deptHHMM, route.estimatedDurationMin),
@@ -387,6 +394,92 @@ export class BookingService {
       bookedAt: booking.bookedAt,
       qrCode,
     };
+  }
+
+  async createCashBooking(conductorUserId: string, dto: CreateCashBookingDto): Promise<BookingDto> {
+    const schedule = await this.scheduleRepo
+      .createQueryBuilder('s')
+      .innerJoinAndSelect('s.bus', 'bus')
+      .where('s.id = :scheduleId', { scheduleId: dto.scheduleId })
+      .getOne();
+    if (!schedule) throw new AppError('Schedule not found', HttpStatus.NOT_FOUND);
+    if (!schedule.isActive) throw new AppError('Schedule is not active', HttpStatus.UNPROCESSABLE_ENTITY);
+
+    const conductor = await this.conductorRepo.findOne({
+      where: { user: { id: conductorUserId } },
+    });
+    if (!conductor) throw new AppError('Conductor profile not found', HttpStatus.FORBIDDEN);
+
+    const assignment = await this.assignmentRepo.findOne({
+      where: { bus: { id: schedule.bus.id }, conductor: { id: conductor.id }, isActive: true },
+    });
+    if (!assignment) throw new AppError('Conductor is not assigned to this bus', HttpStatus.FORBIDDEN);
+
+    if (!dto.seatNumbers.length) {
+      throw new AppError('At least one seat must be selected', HttpStatus.BAD_REQUEST);
+    }
+
+    const layout = schedule.bus.seatLayoutJson as SeatLayout;
+    const validSeats = new Set(buildSeatDefs(layout).map((s) => s.seatNumber));
+    for (const seat of dto.seatNumbers) {
+      if (!validSeats.has(seat)) {
+        throw new AppError(`Invalid seat number: ${seat}`, HttpStatus.BAD_REQUEST);
+      }
+    }
+
+    const totalFare = Number(schedule.baseFare) * dto.seatNumbers.length;
+
+    const qr = this.dataSource.createQueryRunner();
+    await qr.connect();
+    await qr.startTransaction();
+    try {
+      const booking = qr.manager.create(Booking, {
+        customer: null,
+        passengerName: dto.passengerName ?? null,
+        passengerPhone: dto.passengerPhone ?? null,
+        schedule,
+        tripDate: dto.tripDate,
+        seatNumbers: dto.seatNumbers,
+        totalFare,
+        discountAmount: 0,
+        coupon: null,
+        status: BookingStatus.CONFIRMED,
+        ticketToken: randomUUID(),
+      });
+      const savedBooking = await qr.manager.save(booking);
+
+      const bookedSeats = dto.seatNumbers.map((sn) =>
+        qr.manager.create(BookedSeat, {
+          booking: savedBooking,
+          schedule,
+          tripDate: dto.tripDate,
+          seatNumber: sn,
+        }),
+      );
+      await qr.manager.save(bookedSeats);
+
+      await qr.manager.save(
+        qr.manager.create(Payment, {
+          booking: savedBooking,
+          amount: totalFare,
+          paymentMethod: PaymentMethod.CASH,
+          status: PaymentStatus.COMPLETED,
+          paidAt: new Date(),
+        }),
+      );
+
+      await qr.commitTransaction();
+      return this.toDto(savedBooking);
+    } catch (err: unknown) {
+      await qr.rollbackTransaction();
+      const pgErr = err as { code?: string };
+      if (pgErr.code === '23505') {
+        throw new AppError('One or more seats are already booked for this trip', HttpStatus.CONFLICT);
+      }
+      throw err;
+    } finally {
+      await qr.release();
+    }
   }
 
   async board(bookingId: string, conductorUserId: string): Promise<BookingDto> {
@@ -516,7 +609,9 @@ export class BookingService {
     const discountAmount = Number(booking.discountAmount ?? 0);
     return {
       id: booking.id,
-      customerId: booking.customer?.id ?? '',
+      customerId: booking.customer?.id ?? null,
+      passengerName: booking.passengerName ?? null,
+      passengerPhone: booking.passengerPhone ?? null,
       scheduleId: booking.schedule?.id ?? '',
       tripDate: booking.tripDate,
       seatNumbers: booking.seatNumbers,

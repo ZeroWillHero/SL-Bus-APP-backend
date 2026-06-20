@@ -53,6 +53,9 @@ export class AuthService {
         HttpStatus.FORBIDDEN,
       );
     }
+    if (user.isBanned) {
+      throw new AppError('Account is banned. Contact support.', HttpStatus.FORBIDDEN);
+    }
     const accessToken = this.generateAccessToken(user);
     const refreshToken = this.generateRefreshToken(user);
     this.setRefreshCookie(res, refreshToken);
@@ -160,6 +163,7 @@ export class AuthService {
         sub: user.id,
         email: user.email,
         roles: user.userRoles?.map((ur) => ur.role.name) ?? [],
+        isBanned: user.isBanned ?? false,
       },
       process.env.JWT_SECRET || 'default_secret',
       { expiresIn },

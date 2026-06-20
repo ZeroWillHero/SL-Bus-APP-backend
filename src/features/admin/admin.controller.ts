@@ -7,7 +7,10 @@ import {
   Patch,
   Post,
   Query,
+  Req,
 } from '@nestjs/common';
+import type { Request } from 'express';
+import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
@@ -17,7 +20,10 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { BusOwnerService } from '../bus-owner/bus-owner.service';
+import { BusOwnerDto } from '../bus-owner/dto/bus-owner.dto';
 import { BusOwnerPageDto } from '../bus-owner/dto/bus-owner-page.dto';
+import { UserService } from '../user/user.service';
+import { UserDTO } from '../user/dto/user.dto';
 import { BusService } from '../bus/bus.service';
 import { BusDto } from '../bus/dto/bus.dto';
 import { BusDocumentDto } from '../bus/dto/bus-document.dto';
@@ -44,7 +50,67 @@ export class AdminController {
     private readonly busService: BusService,
     private readonly paymentService: PaymentService,
     private readonly couponService: CouponService,
+    private readonly userService: UserService,
   ) { }
+
+  // ─── User Management ─────────────────────────────────────────────────────────
+
+  @Get('users')
+  @ApiOperation({ summary: 'List all users (paginated, filterable)' })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'email', required: false })
+  @ApiQuery({ name: 'phone', required: false })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiOkResponse({ type: [UserDTO] })
+  async listUsers(
+    @Query('search') search?: string,
+    @Query('email') email?: string,
+    @Query('phone') phone?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ): Promise<ResponseDTO<UserDTO[]>> {
+    const result = await this.userService.getAll({
+      search,
+      email,
+      phone,
+      page: page ? Number(page) : 1,
+      limit: limit ? Number(limit) : 50,
+    });
+    return new ResponseDTO(true, 'Users fetched successfully', result);
+  }
+
+  @Get('users/:id')
+  @ApiOperation({ summary: 'Get user by ID' })
+  @ApiOkResponse({ type: UserDTO })
+  async getUser(@Param('id') id: string): Promise<ResponseDTO<UserDTO>> {
+    const result = await this.userService.getById(id);
+    return new ResponseDTO(true, 'User fetched successfully', result);
+  }
+
+  @Post('users/:id/ban')
+  @ApiOperation({ summary: 'Ban a user' })
+  @ApiOkResponse({ type: UserDTO })
+  async banUser(@Param('id') id: string): Promise<ResponseDTO<UserDTO>> {
+    const result = await this.userService.banUser(id);
+    return new ResponseDTO(true, 'User banned successfully', result);
+  }
+
+  @Post('users/:id/unban')
+  @ApiOperation({ summary: 'Unban a user' })
+  @ApiOkResponse({ type: UserDTO })
+  async unbanUser(@Param('id') id: string): Promise<ResponseDTO<UserDTO>> {
+    const result = await this.userService.unbanUser(id);
+    return new ResponseDTO(true, 'User unbanned successfully', result);
+  }
+
+  @Delete('users/:id')
+  @ApiOperation({ summary: 'Hard-delete a user' })
+  @ApiOkResponse()
+  async deleteUser(@Param('id') id: string): Promise<ResponseDTO<null>> {
+    await this.userService.delete(id);
+    return new ResponseDTO(true, 'User deleted successfully', null);
+  }
 
   // ─── Bus Owner ────────────────────────────────────────────────────────────────
   @Get('bus-owners')
@@ -99,6 +165,33 @@ export class AdminController {
     return new ResponseDTO(true, 'Bus owners fetched successfully', result);
   }
 
+  @Get('bus-owners/:id')
+  @ApiOperation({ summary: 'Get bus owner detail' })
+  @ApiOkResponse({ type: BusOwnerDto })
+  async getBusOwner(@Param('id') id: string): Promise<ResponseDTO<BusOwnerDto>> {
+    const result = await this.busOwnerService.findById(id);
+    return new ResponseDTO(true, 'Bus owner fetched successfully', result);
+  }
+
+  @Post('bus-owners/:id/approve')
+  @ApiOperation({ summary: 'Approve a bus owner' })
+  @ApiOkResponse({ type: BusOwnerDto })
+  async approveBusOwner(@Param('id') id: string): Promise<ResponseDTO<BusOwnerDto>> {
+    const result = await this.busOwnerService.approve(id);
+    return new ResponseDTO(true, 'Bus owner approved successfully', result);
+  }
+
+  @Post('bus-owners/:id/reject')
+  @ApiOperation({ summary: 'Reject a bus owner with a mandatory reason' })
+  @ApiOkResponse({ type: BusOwnerDto })
+  async rejectBusOwner(
+    @Param('id') id: string,
+    @Body() dto: RejectBusDto,
+  ): Promise<ResponseDTO<BusOwnerDto>> {
+    const result = await this.busOwnerService.reject(id, dto.reason);
+    return new ResponseDTO(true, 'Bus owner rejected', result);
+  }
+
   // ─── Bus Management ───────────────────────────────────────────────────────────
 
   @Get('buses')
@@ -147,6 +240,27 @@ export class AdminController {
   ): Promise<ResponseDTO<BusDto>> {
     const result = await this.busService.reject(id, dto.reason);
     return new ResponseDTO(true, 'Bus rejected', result);
+  }
+
+  @Post('buses/:id/documents/:docId/verify')
+  @ApiOperation({ summary: 'Mark a bus document as verified' })
+  @ApiOkResponse({ type: BusDocumentDto })
+  async verifyDocument(
+    @Req() req: Request,
+    @Param('id') busId: string,
+    @Param('docId') docId: string,
+  ): Promise<ResponseDTO<BusDocumentDto>> {
+    const user = req.user as AuthenticatedUser;
+    const result = await this.busService.verifyDocument(busId, docId, user.userId);
+    return new ResponseDTO(true, 'Document verified successfully', result);
+  }
+
+  @Delete('buses/:id')
+  @ApiOperation({ summary: 'Hard-delete a bus' })
+  @ApiOkResponse()
+  async deleteBus(@Param('id') id: string): Promise<ResponseDTO<null>> {
+    await this.busService.deleteBus(id);
+    return new ResponseDTO(true, 'Bus deleted successfully', null);
   }
 
   // ─── Payment Management ───────────────────────────────────────────────────────

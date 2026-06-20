@@ -175,7 +175,7 @@ export class ConductorService {
       }),
     );
     const timestamp = new Date();
-    exist.user.updatedAt = timestamp;
+    if (exist.user) exist.user.updatedAt = timestamp;
     await this.conductorRepository.save(updated);
     return this.convertToDTO(updated);
   }
@@ -196,10 +196,10 @@ export class ConductorService {
     conductorDTO.id = conductor.id;
     conductorDTO.firstName = conductor.firstName;
     conductorDTO.lastName = conductor.lastName;
-    conductorDTO.licenseNumber = conductor.licenseNumber;
+    conductorDTO.licenseNumber = conductor.licenseNumber ?? null;
     conductorDTO.phoneNumber = conductor.contactNumber;
     conductorDTO.email = conductor.user?.email;
-    conductorDTO.user = this.convertUserToDTO(conductor.user);
+    conductorDTO.user = this.convertUserToDTO(conductor.user ?? undefined);
     conductorDTO.busOwnerId = conductor.busOwner?.id ?? null;
     return conductorDTO;
   }
@@ -215,7 +215,7 @@ export class ConductorService {
         : ['', ''];
     conductor.firstName = firstName || '';
     conductor.lastName = lastName || '';
-    conductor.licenseNumber = conductorDTO.licenseNumber || '';
+    conductor.licenseNumber = conductorDTO.licenseNumber ?? null;
     conductor.contactNumber = conductorDTO.phoneNumber || '';
     return conductor;
   }
@@ -230,6 +230,7 @@ export class ConductorService {
       email: user.email,
       phone: user.phone,
       isVerified: user.isVerified,
+      isBanned: user.isBanned ?? false,
       roles: user.userRoles?.map((ur) => ur.role.name).filter((n): n is string => !!n) ?? [],
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

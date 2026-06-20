@@ -9,6 +9,7 @@ import {
 import { User } from '../../user/entity/user.entity';
 import { Bus } from '../../bus/entities/bus.entity';
 import { Conductor } from '../../conductor/entities/conductor.entity';
+import { ApprovalStatus } from '../../bus/enums/approval-status.enum';
 
 @Entity()
 export class BusOwner {
@@ -29,6 +30,18 @@ export class BusOwner {
 
   @Column('text')
   address!: string;
+
+  @Column({
+    type: 'varchar',
+    default: ApprovalStatus.PENDING,
+  })
+  approvalStatus!: ApprovalStatus;
+
+  @Column({ type: 'text', nullable: true })
+  rejectionReason!: string | null;
+
+  @Column({ type: 'varchar', nullable: true })
+  nicDocPath!: string | null;
 
   @OneToOne(() => User, (user) => user.busOwner, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })

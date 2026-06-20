@@ -13,6 +13,8 @@ const mockUser: User = {
   phone: '0771234567',
   password: '',
   isVerified: true,
+  isBanned: false,
+  profilePicture: null,
   createdAt: new Date(),
   updatedAt: new Date(),
   userRoles: [{ role: { name: 'Customer' } } as any],
