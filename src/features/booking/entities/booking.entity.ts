@@ -23,10 +23,10 @@ export class Booking {
   @JoinColumn({ name: 'customerId' })
   customer!: Customer | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   passengerName!: string | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   passengerPhone!: string | null;
 
   @ManyToOne(() => Schedule, { onDelete: 'CASCADE' })

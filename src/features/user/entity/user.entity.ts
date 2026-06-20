@@ -41,6 +41,9 @@ export class User {
   })
   isBanned!: boolean;
 
+  @Column({ type: 'varchar', nullable: true })
+  profilePicture!: string | null;
+
   @OneToOne(() => Conductor, (conductor) => conductor.user)
   conductor?: Conductor;
 

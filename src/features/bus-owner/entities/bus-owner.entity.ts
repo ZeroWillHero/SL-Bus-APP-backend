@@ -40,6 +40,9 @@ export class BusOwner {
   @Column({ type: 'text', nullable: true })
   rejectionReason!: string | null;
 
+  @Column({ type: 'varchar', nullable: true })
+  nicDocPath!: string | null;
+
   @OneToOne(() => User, (user) => user.busOwner, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'userId' })
   user!: User;

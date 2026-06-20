@@ -17,20 +17,26 @@ export class CreateConductorDto extends OmitType(CreateUserDTO, ['phone', 'passw
   @ApiProperty({
     description: 'Conductor license number',
     example: 'B1234567',
+    required: false,
+    nullable: true,
   })
-  licenseNumber!: string;
+  licenseNumber?: string | null;
 
   @ApiProperty({
     description: 'Conductor license expiry date',
     example: '2025-12-31',
+    required: false,
+    nullable: true,
   })
-  licenseExpiryDate!: Date;
+  licenseExpiryDate?: Date | null;
 
   @ApiProperty({
     description: 'Conductor license document (base64 encoded)',
     example: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...',
+    required: false,
+    nullable: true,
   })
-  licenseDoc!: string;
+  licenseDoc?: string | null;
 
   @ApiProperty({
     description: 'Conductor contact number',

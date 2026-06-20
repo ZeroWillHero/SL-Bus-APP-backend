@@ -52,6 +52,13 @@ export class UserDTO {
   updatedAt!: Date;
 
   @ApiProperty({
+    description: 'Profile picture relative path or URL',
+    required: false,
+    nullable: true,
+  })
+  profilePicture?: string | null;
+
+  @ApiProperty({
     description: 'conductor details if the user is a conductor',
   })
   conductor?: Conductor;
