@@ -1,18 +1,36 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpStatus } from '@nestjs/common';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { UserService } from './user.service';
 import { User } from './entity/user.entity';
-import { AppError } from '../../common/exceptions/app.exception';
-import { AuthType } from '../../utils/enums/auth.type';
-import { CreateUserDTO } from './dto/create-user.dto';
 import { UserFiltersDTO } from './dto/filters.dto';
+
+const makeUser = (overrides: Partial<User> = {}): User =>
+  ({
+    id: 'user-uuid',
+    email: 'john@example.com',
+    phone: '+94771234567',
+    password: 'hashed-password',
+    isVerified: false,
+    isBanned: false,
+    profilePicture: null,
+    createdAt: new Date('2024-01-01'),
+    updatedAt: new Date('2024-01-01'),
+    ...overrides,
+  }) as User;
 
 describe('UserService', () => {
   let service: UserService;
-  let userRepository: jest.Mocked<Partial<Repository<User>>>;
+  let userRepository: {
+    findOne: jest.Mock;
+    findOneBy: jest.Mock;
+    create: jest.Mock;
+    save: jest.Mock;
+    remove: jest.Mock;
+    createQueryBuilder: jest.Mock;
+  };
   let queryBuilder: {
+    leftJoinAndSelect: jest.Mock;
     andWhere: jest.Mock;
     orderBy: jest.Mock;
     skip: jest.Mock;
@@ -20,29 +38,20 @@ describe('UserService', () => {
     getMany: jest.Mock;
   };
 
-  const createUserEntity = (overrides: Partial<User> = {}): User =>
-    ({
-      id: 'a8a0cdfd-8f96-489f-bf52-f8f24fe7f635',
-      username: 'john_doe',
-      password: 'hashed-password',
-      email: 'john@example.com',
-      phone: '+94771234567',
-      authType: AuthType.PHONE,
-      ...overrides,
-    }) as User;
-
   beforeEach(async () => {
     queryBuilder = {
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       skip: jest.fn().mockReturnThis(),
       take: jest.fn().mockReturnThis(),
-      getMany: jest.fn(),
+      getMany: jest.fn().mockResolvedValue([]),
     };
 
     userRepository = {
       findOne: jest.fn(),
-      create: jest.fn(),
+      findOneBy: jest.fn(),
+      create: jest.fn().mockImplementation((data) => data),
       save: jest.fn(),
       remove: jest.fn(),
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
@@ -51,324 +60,406 @@ describe('UserService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UserService,
-        {
-          provide: getRepositoryToken(User),
-          useValue: userRepository,
-        },
+        { provide: getRepositoryToken(User), useValue: userRepository },
       ],
     }).compile();
 
     service = module.get<UserService>(UserService);
   });
 
-  it('should be defined', () => {
-    expect(service).toBeDefined();
-  });
+  it('should be defined', () => expect(service).toBeDefined());
+
+  // ─── create ────────────────────────────────────────────────────────────────
 
   describe('create', () => {
-    it('creates a user with EMAIL auth type when phone is not provided', async () => {
-      const dto: CreateUserDTO = {
-        username: 'alice',
-        password: 'secret',
+    it('hashes the password before saving', async () => {
+      const saved = makeUser({ email: 'alice@example.com' });
+      userRepository.create.mockReturnValue(saved);
+      userRepository.save.mockResolvedValue(saved);
+
+      await service.create({ email: 'alice@example.com', password: 'plain-secret' });
+
+      expect(userRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: 'alice@example.com',
+          password: expect.not.stringMatching('plain-secret'),
+        }),
+      );
+    });
+
+    it('returns a UserDTO after saving', async () => {
+      const saved = makeUser({ email: 'alice@example.com', isVerified: false });
+      userRepository.create.mockReturnValue(saved);
+      userRepository.save.mockResolvedValue(saved);
+
+      const result = await service.create({ email: 'alice@example.com', password: 'pw' });
+
+      expect(result.email).toBe('alice@example.com');
+      expect(result.isVerified).toBe(false);
+    });
+
+    it('uses provided EntityManager repository when passed', async () => {
+      const saved = makeUser();
+      const mockRepo = {
+        create: jest.fn().mockReturnValue(saved),
+        save: jest.fn().mockResolvedValue(saved),
+      };
+      const mockManager = { getRepository: jest.fn().mockReturnValue(mockRepo) };
+
+      await service.create({ email: 'test@test.com', password: 'pw' }, mockManager as any);
+
+      expect(mockManager.getRepository).toHaveBeenCalledWith(User);
+      expect(mockRepo.save).toHaveBeenCalled();
+    });
+
+    it('stores phone when provided', async () => {
+      const saved = makeUser({ phone: '+94779999999' });
+      userRepository.create.mockReturnValue(saved);
+      userRepository.save.mockResolvedValue(saved);
+
+      const result = await service.create({
         email: 'alice@example.com',
-      };
-
-      const createdEntity = createUserEntity({
-        id: '11111111-1111-1111-1111-111111111111',
-        username: dto.username,
-        email: dto.email,
-        phone: undefined as unknown as string,
-        authType: AuthType.EMAIL,
+        password: 'pw',
+        phone: '+94779999999',
       });
 
-      userRepository.findOne!.mockResolvedValue(null);
-      userRepository.create!.mockImplementation((payload) => payload as User);
-      userRepository.save!.mockResolvedValue(createdEntity);
-
-      const result = await service.create(dto);
-
-      expect(userRepository.findOne).toHaveBeenCalledWith({
-        where: { email: dto.email },
-      });
-      expect(userRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          username: dto.username,
-          email: dto.email,
-          authType: AuthType.EMAIL,
-          password: expect.any(String),
-        }),
-      );
-      expect(result).toEqual({
-        id: createdEntity.id,
-        username: createdEntity.username,
-        email: createdEntity.email,
-        phone: createdEntity.phone,
-        authType: AuthType.EMAIL,
-      });
-    });
-
-    it('creates a user with PHONE auth type when phone is provided', async () => {
-      const dto: CreateUserDTO = {
-        username: 'bob',
-        password: 'secret',
-        email: 'bob@example.com',
-        phone: '+94770000000',
-      };
-      const createdEntity = createUserEntity({
-        id: '22222222-2222-2222-2222-222222222222',
-        username: dto.username,
-        email: dto.email,
-        phone: dto.phone!,
-        authType: AuthType.PHONE,
-      });
-
-      userRepository.findOne!.mockResolvedValue(null);
-      userRepository.create!.mockImplementation((payload) => payload as User);
-      userRepository.save!.mockResolvedValue(createdEntity);
-
-      const result = await service.create(dto);
-
-      expect(userRepository.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          username: dto.username,
-          email: dto.email,
-          phone: dto.phone,
-          authType: AuthType.PHONE,
-          password: expect.any(String),
-        }),
-      );
-      expect(result.authType).toBe(AuthType.PHONE);
-    });
-
-    it('throws conflict when email already exists', async () => {
-      const dto: CreateUserDTO = {
-        username: 'john',
-        password: 'secret',
-        email: 'john@example.com',
-      };
-
-      userRepository.findOne!.mockResolvedValue(createUserEntity());
-
-      await expect(service.create(dto)).rejects.toThrow(AppError);
-      await expect(service.create(dto)).rejects.toMatchObject({
-        status: HttpStatus.CONFLICT,
-      });
-      expect(userRepository.save).not.toHaveBeenCalled();
-    });
-
-    it('throws internal error when saved user has no id', async () => {
-      const dto: CreateUserDTO = {
-        username: 'jane',
-        password: 'secret',
-        email: 'jane@example.com',
-      };
-
-      userRepository.findOne!.mockResolvedValue(null);
-      userRepository.create!.mockImplementation((payload) => payload as User);
-      userRepository.save!.mockResolvedValue(createUserEntity({ id: '' }));
-
-      await expect(service.create(dto)).rejects.toThrow(AppError);
-      await expect(service.create(dto)).rejects.toMatchObject({
-        status: HttpStatus.INTERNAL_SERVER_ERROR,
-      });
+      expect(result.phone).toBe('+94779999999');
     });
   });
 
+  // ─── getAll ────────────────────────────────────────────────────────────────
+
   describe('getAll', () => {
-    it('returns all users as DTOs when no filters are provided', async () => {
-      const users = [
-        createUserEntity({
-          id: '33333333-3333-3333-3333-333333333333',
-          username: 'user1',
-          email: 'user1@example.com',
-          authType: AuthType.EMAIL,
-        }),
-        createUserEntity({
-          id: '44444444-4444-4444-4444-444444444444',
-          username: 'user2',
-          email: 'user2@example.com',
-          phone: '+94771112222',
-          authType: AuthType.PHONE,
-        }),
-      ];
+    it('returns all users as DTOs with no filters', async () => {
+      const users = [makeUser(), makeUser({ id: 'user-2', email: 'b@b.com' })];
       queryBuilder.getMany.mockResolvedValue(users);
 
       const result = await service.getAll();
 
       expect(userRepository.createQueryBuilder).toHaveBeenCalledWith('user');
-      expect(result).toEqual([
-        {
-          id: users[0].id,
-          username: users[0].username,
-          email: users[0].email,
-          phone: users[0].phone,
-          authType: users[0].authType,
-        },
-        {
-          id: users[1].id,
-          username: users[1].username,
-          email: users[1].email,
-          phone: users[1].phone,
-          authType: users[1].authType,
-        },
-      ]);
+      expect(queryBuilder.leftJoinAndSelect).toHaveBeenCalledWith(
+        'user.userRoles',
+        'userRoles',
+      );
+      expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('user-uuid');
     });
 
-    it('applies all supported filters and pagination', async () => {
-      const filters: UserFiltersDTO = {
-        search: 'john',
-        email: 'john@example.com',
-        phone: '+94770000000',
-        sortBy: 'username',
-        sortOrder: 'DESC',
-        page: 2,
-        limit: 5,
-      };
+    it('applies search filter on email and phone with ILIKE', async () => {
       queryBuilder.getMany.mockResolvedValue([]);
 
-      await service.getAll(filters);
+      await service.getAll({ search: 'john' } as UserFiltersDTO);
 
       expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-        'user.username ILIKE :search OR user.email ILIKE :search OR user.phone ILIKE :search',
+        'user.email ILIKE :search OR user.phone ILIKE :search',
         { search: '%john%' },
       );
-      expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-        'user.email = :email',
-        {
-          email: filters.email,
-        },
-      );
-      expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-        'user.phone = :phone',
-        {
-          phone: filters.phone,
-        },
-      );
-      expect(queryBuilder.orderBy).toHaveBeenCalledWith(
-        'user.username',
-        'DESC',
-      );
-      expect(queryBuilder.skip).toHaveBeenCalledWith(5);
-      expect(queryBuilder.take).toHaveBeenCalledWith(5);
     });
 
-    it('uses default ASC sort order when sortOrder is not provided', async () => {
+    it('applies exact email filter', async () => {
+      queryBuilder.getMany.mockResolvedValue([]);
+
+      await service.getAll({ email: 'john@example.com' } as UserFiltersDTO);
+
+      expect(queryBuilder.andWhere).toHaveBeenCalledWith('user.email = :email', {
+        email: 'john@example.com',
+      });
+    });
+
+    it('applies exact phone filter', async () => {
+      queryBuilder.getMany.mockResolvedValue([]);
+
+      await service.getAll({ phone: '+94771234567' } as UserFiltersDTO);
+
+      expect(queryBuilder.andWhere).toHaveBeenCalledWith('user.phone = :phone', {
+        phone: '+94771234567',
+      });
+    });
+
+    it('applies orderBy with default ASC', async () => {
       queryBuilder.getMany.mockResolvedValue([]);
 
       await service.getAll({ sortBy: 'email' } as UserFiltersDTO);
 
       expect(queryBuilder.orderBy).toHaveBeenCalledWith('user.email', 'ASC');
     });
-  });
 
-  describe('update', () => {
-    it('updates and returns user DTO', async () => {
-      const existingUser = createUserEntity({
-        authType: AuthType.EMAIL,
-        phone: undefined as unknown as string,
-      });
-      const updatePayload: Partial<CreateUserDTO> = {
-        username: 'john_updated',
-        phone: '+94779990000',
-      };
-      const savedUser = createUserEntity({
-        ...existingUser,
-        ...updatePayload,
-        authType: AuthType.PHONE,
-      });
+    it('applies orderBy with explicit DESC', async () => {
+      queryBuilder.getMany.mockResolvedValue([]);
 
-      userRepository.findOne!.mockResolvedValue(existingUser);
-      userRepository.save!.mockResolvedValue(savedUser);
+      await service.getAll({ sortBy: 'createdAt', sortOrder: 'DESC' } as UserFiltersDTO);
 
-      const result = await service.update(existingUser.id, updatePayload);
-
-      expect(userRepository.save).toHaveBeenCalledWith({
-        ...existingUser,
-        ...updatePayload,
-        authType: AuthType.PHONE,
-      });
-      expect(result).toEqual({
-        id: savedUser.id,
-        username: savedUser.username,
-        email: savedUser.email,
-        phone: savedUser.phone,
-        authType: AuthType.PHONE,
-      });
+      expect(queryBuilder.orderBy).toHaveBeenCalledWith('user.createdAt', 'DESC');
     });
 
-    it('throws not found when user does not exist', async () => {
-      userRepository.findOne!.mockResolvedValue(null);
+    it('applies pagination skip/take', async () => {
+      queryBuilder.getMany.mockResolvedValue([]);
 
-      await expect(
-        service.update('missing-id', { username: 'x' }),
-      ).rejects.toThrow(AppError);
-      await expect(
-        service.update('missing-id', { username: 'x' }),
-      ).rejects.toMatchObject({
+      await service.getAll({ page: 3, limit: 10 });
+
+      expect(queryBuilder.skip).toHaveBeenCalledWith(20); // (3-1) * 10
+      expect(queryBuilder.take).toHaveBeenCalledWith(10);
+    });
+
+    it('returns empty array when no users match', async () => {
+      queryBuilder.getMany.mockResolvedValue([]);
+      const result = await service.getAll();
+      expect(result).toEqual([]);
+    });
+  });
+
+  // ─── getById ───────────────────────────────────────────────────────────────
+
+  describe('getById', () => {
+    it('returns a UserDTO for an existing user', async () => {
+      userRepository.findOne.mockResolvedValue(makeUser());
+
+      const result = await service.getById('user-uuid');
+
+      expect(result.id).toBe('user-uuid');
+      expect(result.email).toBe('john@example.com');
+    });
+
+    it('throws 404 when user does not exist', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.getById('missing')).rejects.toMatchObject({
         status: HttpStatus.NOT_FOUND,
       });
     });
   });
 
-  describe('delete', () => {
-    it('removes an existing user', async () => {
-      const existingUser = createUserEntity();
-      userRepository.findOne!.mockResolvedValue(existingUser);
-      userRepository.remove!.mockResolvedValue(existingUser);
+  // ─── getByEmail ────────────────────────────────────────────────────────────
 
-      await service.delete(existingUser.id);
+  describe('getByEmail', () => {
+    it('returns UserDTO when found', async () => {
+      userRepository.findOne.mockResolvedValue(makeUser());
 
-      expect(userRepository.remove).toHaveBeenCalledWith(existingUser);
+      const result = await service.getByEmail('john@example.com');
+
+      expect(result?.email).toBe('john@example.com');
     });
 
-    it('throws not found when deleting missing user', async () => {
-      userRepository.findOne!.mockResolvedValue(null);
+    it('returns null when not found', async () => {
+      userRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.delete('missing-id')).rejects.toThrow(AppError);
-      await expect(service.delete('missing-id')).rejects.toMatchObject({
+      const result = await service.getByEmail('missing@example.com');
+
+      expect(result).toBeNull();
+    });
+
+    it('loads conductor relation', async () => {
+      userRepository.findOne.mockResolvedValue(makeUser());
+
+      await service.getByEmail('john@example.com');
+
+      expect(userRepository.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          relations: expect.arrayContaining(['conductor']),
+        }),
+      );
+    });
+  });
+
+  // ─── findByEmailOrPhone ────────────────────────────────────────────────────
+
+  describe('findByEmailOrPhone', () => {
+    it('returns the raw User entity (not DTO)', async () => {
+      const user = makeUser();
+      userRepository.findOne.mockResolvedValue(user);
+
+      const result = await service.findByEmailOrPhone('john@example.com');
+
+      expect(result).toBe(user);
+    });
+
+    it('returns null when no match', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      const result = await service.findByEmailOrPhone('missing@example.com');
+
+      expect(result).toBeNull();
+    });
+  });
+
+  // ─── update ────────────────────────────────────────────────────────────────
+
+  describe('update', () => {
+    it('merges fields and returns updated DTO', async () => {
+      const existing = makeUser();
+      const updated = makeUser({ phone: '+94779999999' });
+      userRepository.findOne.mockResolvedValue(existing);
+      userRepository.save.mockResolvedValue(updated);
+
+      const result = await service.update('user-uuid', { phone: '+94779999999' });
+
+      expect(result.phone).toBe('+94779999999');
+    });
+
+    it('throws 404 when user not found', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.update('missing', { phone: '+1' })).rejects.toMatchObject({
+        status: HttpStatus.NOT_FOUND,
+      });
+      expect(userRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── delete ────────────────────────────────────────────────────────────────
+
+  describe('delete', () => {
+    it('removes the user from the repository', async () => {
+      const user = makeUser();
+      userRepository.findOne.mockResolvedValue(user);
+      userRepository.remove.mockResolvedValue(user);
+
+      await service.delete('user-uuid');
+
+      expect(userRepository.remove).toHaveBeenCalledWith(user);
+    });
+
+    it('throws 404 when user does not exist', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.delete('missing')).rejects.toMatchObject({
         status: HttpStatus.NOT_FOUND,
       });
       expect(userRepository.remove).not.toHaveBeenCalled();
     });
   });
 
-  describe('convert methods', () => {
-    it('convertToDTO maps fields and applies empty string fallback for username/email', () => {
-      const dto = service.convertToDTO(
-        createUserEntity({
-          username: undefined as unknown as string,
-          email: undefined as unknown as string,
-          phone: undefined as unknown as string,
-          authType: AuthType.EMAIL,
-        }),
-      );
+  // ─── banUser ───────────────────────────────────────────────────────────────
 
-      expect(dto).toEqual({
-        id: 'a8a0cdfd-8f96-489f-bf52-f8f24fe7f635',
-        username: '',
-        email: '',
-        phone: undefined,
-        authType: AuthType.EMAIL,
+  describe('banUser', () => {
+    it('sets isBanned to true and returns DTO', async () => {
+      const user = makeUser({ isBanned: false });
+      userRepository.findOne.mockResolvedValue(user);
+      userRepository.save.mockResolvedValue({ ...user, isBanned: true });
+
+      const result = await service.banUser('user-uuid');
+
+      expect(userRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ isBanned: true }),
+      );
+      expect(result.isBanned).toBe(true);
+    });
+
+    it('throws 404 when user not found', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.banUser('missing')).rejects.toMatchObject({
+        status: HttpStatus.NOT_FOUND,
+      });
+    });
+  });
+
+  // ─── unbanUser ─────────────────────────────────────────────────────────────
+
+  describe('unbanUser', () => {
+    it('sets isBanned to false and returns DTO', async () => {
+      const user = makeUser({ isBanned: true });
+      userRepository.findOne.mockResolvedValue(user);
+      userRepository.save.mockResolvedValue({ ...user, isBanned: false });
+
+      const result = await service.unbanUser('user-uuid');
+
+      expect(userRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ isBanned: false }),
+      );
+      expect(result.isBanned).toBe(false);
+    });
+
+    it('throws 404 when user not found', async () => {
+      userRepository.findOne.mockResolvedValue(null);
+
+      await expect(service.unbanUser('missing')).rejects.toMatchObject({
+        status: HttpStatus.NOT_FOUND,
+      });
+    });
+  });
+
+  // ─── verifyUser ────────────────────────────────────────────────────────────
+
+  describe('verifyUser', () => {
+    it('sets isVerified to true', async () => {
+      const user = makeUser({ isVerified: false });
+      userRepository.findOneBy.mockResolvedValue(user);
+      userRepository.save.mockResolvedValue({ ...user, isVerified: true });
+
+      await service.verifyUser('+94771234567', '123456');
+
+      expect(userRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ isVerified: true }),
+      );
+    });
+
+    it('throws 400 when user is already verified', async () => {
+      userRepository.findOneBy.mockResolvedValue(makeUser({ isVerified: true }));
+
+      await expect(service.verifyUser('+94771234567', '123456')).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
       });
     });
 
-    it('convertToEntity maps dto and sets password empty string', () => {
-      const entity = service.convertToEntity({
-        id: '55555555-5555-5555-5555-555555555555',
-        username: 'entity_user',
-        email: 'entity@example.com',
-        phone: '+94778889999',
-        authType: AuthType.EMAIL,
-      });
+    it('throws 404 when no user with that phone', async () => {
+      userRepository.findOneBy.mockResolvedValue(null);
 
-      expect(entity).toEqual({
-        id: '55555555-5555-5555-5555-555555555555',
-        username: 'entity_user',
-        password: '',
-        email: 'entity@example.com',
-        phone: '+94778889999',
-        authType: AuthType.PHONE,
+      await expect(service.verifyUser('+94779999999', '123456')).rejects.toMatchObject({
+        status: HttpStatus.NOT_FOUND,
       });
+    });
+  });
+
+  // ─── convertToDTO ──────────────────────────────────────────────────────────
+
+  describe('convertToDTO', () => {
+    it('maps all fields correctly', () => {
+      const user = makeUser({ isVerified: true, isBanned: false });
+      const dto = service.convertToDTO(user);
+
+      expect(dto.id).toBe('user-uuid');
+      expect(dto.email).toBe('john@example.com');
+      expect(dto.phone).toBe('+94771234567');
+      expect(dto.isVerified).toBe(true);
+      expect(dto.isBanned).toBe(false);
+    });
+
+    it('defaults roles to empty array when userRoles is undefined', () => {
+      const dto = service.convertToDTO(makeUser({ userRoles: undefined }));
+      expect(dto.roles).toEqual([]);
+    });
+
+    it('maps role names from userRoles', () => {
+      const user = makeUser({
+        userRoles: [
+          { role: { name: 'Customer' } } as any,
+          { role: { name: 'Conductor' } } as any,
+        ],
+      });
+      const dto = service.convertToDTO(user);
+      expect(dto.roles).toEqual(['Customer', 'Conductor']);
+    });
+
+    it('filters out null/undefined role names', () => {
+      const user = makeUser({
+        userRoles: [
+          { role: { name: null } } as any,
+          { role: { name: 'Admin' } } as any,
+        ],
+      });
+      const dto = service.convertToDTO(user);
+      expect(dto.roles).toEqual(['Admin']);
+    });
+
+    it('defaults email to empty string when undefined', () => {
+      const dto = service.convertToDTO(makeUser({ email: undefined as any }));
+      expect(dto.email).toBe('');
+    });
+
+    it('defaults isBanned to false when undefined', () => {
+      const dto = service.convertToDTO(makeUser({ isBanned: undefined as any }));
+      expect(dto.isBanned).toBe(false);
     });
   });
 });

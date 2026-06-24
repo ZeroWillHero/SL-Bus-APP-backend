@@ -11,6 +11,7 @@ import { BusDocument } from './bus-document.entity';
 import { ApprovalStatus } from '../enums/approval-status.enum';
 import { Route } from '../../route/entities/route.entity';
 import { Schedule } from '../../schedule/entities/schedule.entity';
+import { BusType } from '../enums/bus-type';
 
 @Entity()
 export class Bus {
@@ -22,6 +23,13 @@ export class Bus {
 
   @Column()
   model!: string;
+
+  @Column({
+    type: 'enum',
+    enum: BusType,
+    default: BusType.NORMAL,
+  })
+  busType: string;
 
   @Column({ type: 'smallint' })
   year!: number;

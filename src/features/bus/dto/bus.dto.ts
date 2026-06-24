@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { ApprovalStatus } from '../enums/approval-status.enum';
+import { BusType } from '../enums/bus-type';
 import { BusOwnerDto } from '../../bus-owner/dto/bus-owner.dto';
 import { RouteDto } from '../../route/dto/route.dto';
 import { ScheduleDto } from '../../schedule/dto/schedule.dto';
@@ -13,6 +14,9 @@ export class BusDto {
 
   @ApiProperty()
   model!: string;
+
+  @ApiProperty({ enum: BusType })
+  busType!: BusType;
 
   @ApiProperty()
   year!: number;

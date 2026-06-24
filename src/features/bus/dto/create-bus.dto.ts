@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { BusType } from '../enums/bus-type';
 
 export class SeatLayoutDto {
   @ApiProperty({ example: 10 })
@@ -21,6 +22,9 @@ export class CreateBusDto {
 
   @ApiProperty({ example: 'Ashok Leyland' })
   model!: string;
+
+  @ApiProperty({ enum: BusType, default: BusType.NORMAL, required: false })
+  busType?: BusType;
 
   @ApiProperty({ example: 2019 })
   year!: number;
