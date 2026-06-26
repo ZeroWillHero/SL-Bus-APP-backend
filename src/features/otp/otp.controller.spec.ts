@@ -8,7 +8,12 @@ describe('OtpController', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OtpController],
-      providers: [OtpService],
+      providers: [
+        {
+          provide: OtpService,
+          useValue: { send: jest.fn(), verify: jest.fn(), checkOtp: jest.fn(), consumeOtp: jest.fn() },
+        },
+      ],
     }).compile();
 
     controller = module.get<OtpController>(OtpController);

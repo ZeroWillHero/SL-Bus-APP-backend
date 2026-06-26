@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Req,
   Res,
@@ -27,11 +28,12 @@ import { AuthResponseDTO } from './dto/auth.response.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { AuthRegisterDTO } from './dto/auth.register.dto';
 import { AuthenticatedUser } from './strategies/jwt.strategy';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @ApiTags('Auth')
 @Controller('api/v1/auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(private readonly authService: AuthService) {}
 
   @Public()
   @Post('login')
@@ -41,7 +43,9 @@ export class AuthController {
   @ApiBody({ type: AuthRequestDTO })
   @ApiOkResponse({ description: 'Login successful', type: AuthResponseDTO })
   @ApiUnauthorizedResponse({ description: 'Invalid username or password' })
-  @ApiForbiddenResponse({ description: 'Account not verified — OTP verification required' })
+  @ApiForbiddenResponse({
+    description: 'Account not verified — OTP verification required',
+  })
   async login(
     @Body() body: AuthRequestDTO,
     @Res({ passthrough: true }) res: Response,
@@ -82,19 +86,46 @@ export class AuthController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new user' })
   @ApiBody({ type: AuthRequestDTO })
-  @ApiOkResponse({ description: 'Registration successful', type: AuthRegisterDTO })
+  @ApiOkResponse({
+    description: 'Registration successful',
+    type: AuthRegisterDTO,
+  })
   @ApiBadRequestResponse({ description: 'User already exists' })
-  async register(@Body() body: AuthRequestDTO, @Res({ passthrough: true }) res: Response) {
+  async register(
+    @Body() body: AuthRequestDTO,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     return this.authService.register(body, res);
   }
 
   @Get('verify')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Verify the current access token and return the authenticated user' })
+  @ApiOperation({
+    summary:
+      'Verify the current access token and return the authenticated user',
+  })
   @ApiOkResponse({ description: 'Token is valid, returns current user' })
   @ApiUnauthorizedResponse({ description: 'Missing or invalid access token' })
   async verify(@Req() req: Request) {
     return this.authService.verify(req.user as AuthenticatedUser);
+  }
+
+  @Patch('change-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth()
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @ApiOperation({
+    summary:
+      'Change password — requires a valid OTP sent to the registered phone',
+  })
+  @ApiBody({ type: ChangePasswordDto })
+  @ApiOkResponse({ description: 'Password changed successfully' })
+  @ApiUnauthorizedResponse({
+    description: 'Current password incorrect or invalid OTP',
+  })
+  async changePassword(@Req() req: Request, @Body() body: ChangePasswordDto) {
+    const user = req.user as AuthenticatedUser;
+    return this.authService.changePassword(user.userId, body);
   }
 }

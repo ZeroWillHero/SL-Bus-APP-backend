@@ -11,6 +11,7 @@ import type { Response } from 'express';
 import { AuthRegisterDTO } from './dto/auth.register.dto';
 import { AuthenticatedUser } from './strategies/jwt.strategy';
 import { OtpService } from '../otp/otp.service';
+import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class AuthService {
@@ -18,27 +19,20 @@ export class AuthService {
     private readonly userService: UserService,
     private readonly otpService: OtpService,
     @InjectRepository(User) private readonly userRepo: Repository<User>,
-  ) { }
+  ) {}
 
   async login(data: AuthRequestDTO, res: Response) {
     const user = await this.userService.findByEmailOrPhone(data.username);
-    // user && console.log('User found for login:', user.email); // Debug log
     if (!user) {
-      console.log('No user found with username:', data.username); // Debug log
       throw new AppError(
         'Invalid username or password',
         HttpStatus.UNAUTHORIZED,
       );
     }
-    // find id otp vaid ?
-    const otpValid = await this.otpService.verify(user.phone, data.otp).catch(() => null);
-    
-    if (!otpValid) {
-      throw new AppError(
-        'Invalid or missing OTP for 2FA verification',
-        HttpStatus.FORBIDDEN,
-      );
-    }
+
+    // Check OTP without consuming — survives wrong password so the user can retry.
+    // The OTP is consumed only after all checks pass.
+    await this.otpService.checkOtp(user.phone, data.otp);
 
     const isPasswordValid = await bcrypt.compare(data.password, user.password);
     if (!isPasswordValid) {
@@ -54,12 +48,49 @@ export class AuthService {
       );
     }
     if (user.isBanned) {
-      throw new AppError('Account is banned. Contact support.', HttpStatus.FORBIDDEN);
+      throw new AppError(
+        'Account is banned. Contact support.',
+        HttpStatus.FORBIDDEN,
+      );
     }
+
+    await this.otpService.consumeOtp(user.phone);
+
     const accessToken = this.generateAccessToken(user);
     const refreshToken = this.generateRefreshToken(user);
     this.setRefreshCookie(res, refreshToken);
     return { accessToken, user: this.userService.convertToDTO(user) };
+  }
+
+  async changePassword(userId: string, dto: ChangePasswordDto) {
+    const user = await this.userRepo.findOne({
+      where: { id: userId },
+      relations: ['userRoles', 'userRoles.role'],
+    });
+    if (!user) {
+      throw new AppError('User not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Check OTP without consuming — keeps alive if current password is wrong
+    await this.otpService.checkOtp(user.phone, dto.otp);
+
+    const isPasswordValid = await bcrypt.compare(
+      dto.currentPassword,
+      user.password,
+    );
+    if (!isPasswordValid) {
+      throw new AppError(
+        'Current password is incorrect',
+        HttpStatus.UNAUTHORIZED,
+      );
+    }
+
+    user.password = await bcrypt.hash(dto.newPassword, 10);
+    const updated = await this.userRepo.save(user);
+
+    await this.otpService.consumeOtp(user.phone);
+
+    return this.userService.convertToDTO(updated);
   }
 
   async refresh(refreshToken: string, res: Response) {
@@ -97,7 +128,8 @@ export class AuthService {
   logout(res: Response) {
     const isProd = process.env.NODE_ENV === 'production';
     const sameSite: 'lax' | 'strict' | 'none' = isProd ? 'none' : 'lax';
-    const cookiePath = process.env.REFRESH_COOKIE_PATH || '/api/v1/auth/refresh';
+    const cookiePath =
+      process.env.REFRESH_COOKIE_PATH || '/api/v1/auth/refresh';
     res.cookie('refresh_token', '', {
       httpOnly: true,
       secure: isProd,
@@ -145,7 +177,8 @@ export class AuthService {
   private setRefreshCookie(res: Response, token: string) {
     const isProd = process.env.NODE_ENV === 'production';
     const sameSite: 'lax' | 'strict' | 'none' = isProd ? 'none' : 'lax';
-    const cookiePath = process.env.REFRESH_COOKIE_PATH || '/api/v1/auth/refresh';
+    const cookiePath =
+      process.env.REFRESH_COOKIE_PATH || '/api/v1/auth/refresh';
     res.cookie('refresh_token', token, {
       httpOnly: true,
       secure: isProd,

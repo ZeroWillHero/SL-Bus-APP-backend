@@ -3,6 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
+import { OtpService } from '../otp/otp.service';
 import { User } from '../user/entity/user.entity';
 
 describe('AuthController', () => {
@@ -16,6 +17,10 @@ describe('AuthController', () => {
         {
           provide: UserService,
           useValue: {},
+        },
+        {
+          provide: OtpService,
+          useValue: { checkOtp: jest.fn(), consumeOtp: jest.fn(), verify: jest.fn() },
         },
         {
           provide: getRepositoryToken(User),
