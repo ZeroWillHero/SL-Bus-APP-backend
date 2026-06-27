@@ -29,8 +29,10 @@ const makeMockRes = () => {
 
 describe('AuthService', () => {
   let service: AuthService;
-  let userService: jest.Mocked<Pick<UserService, 'findByEmailOrPhone' | 'convertToDTO'>>;
-  let otpService: { verify: jest.Mock };
+  let userService: jest.Mocked<
+    Pick<UserService, 'findByEmailOrPhone' | 'convertToDTO'>
+  >;
+  let otpService: { checkOtp: jest.Mock; consumeOtp: jest.Mock };
   let userRepo: { findOne: jest.Mock; create: jest.Mock; save: jest.Mock };
 
   beforeEach(async () => {
@@ -39,7 +41,10 @@ describe('AuthService', () => {
       create: jest.fn().mockImplementation((data) => data),
       save: jest.fn(),
     };
-    otpService = { verify: jest.fn() };
+    otpService = {
+      checkOtp: jest.fn().mockResolvedValue(undefined),
+      consumeOtp: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -48,7 +53,9 @@ describe('AuthService', () => {
           provide: UserService,
           useValue: {
             findByEmailOrPhone: jest.fn(),
-            convertToDTO: jest.fn().mockReturnValue({ id: 'user-uuid', email: 'test@example.com' }),
+            convertToDTO: jest
+              .fn()
+              .mockReturnValue({ id: 'user-uuid', email: 'test@example.com' }),
           },
         },
         { provide: OtpService, useValue: otpService },
@@ -69,80 +76,104 @@ describe('AuthService', () => {
       (userService.findByEmailOrPhone as jest.Mock).mockResolvedValue(null);
 
       await expect(
-        service.login({ username: 'x@x.com', password: 'pw', otp: '123456' }, makeMockRes().res),
+        service.login(
+          { username: 'x@x.com', password: 'pw', otp: '123456' },
+          makeMockRes().res,
+        ),
       ).rejects.toMatchObject({ status: HttpStatus.UNAUTHORIZED });
     });
 
-    it('throws 403 when OTP verification fails', async () => {
+    it('throws when OTP verification fails (propagates checkOtp error)', async () => {
       const hashed = await bcrypt.hash('correct', 10);
       (userService.findByEmailOrPhone as jest.Mock).mockResolvedValue({
         ...mockUser,
         password: hashed,
       });
-      otpService.verify.mockRejectedValue(new Error('Invalid OTP'));
+      otpService.checkOtp.mockRejectedValue(
+        Object.assign(new Error('Invalid OTP'), { status: HttpStatus.BAD_REQUEST }),
+      );
 
       await expect(
-        service.login({ username: 'test@example.com', password: 'correct', otp: 'wrong' }, makeMockRes().res),
-      ).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
+        service.login(
+          { username: 'test@example.com', password: 'correct', otp: 'wrong' },
+          makeMockRes().res,
+        ),
+      ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
     });
 
-    it('throws 401 when password is wrong (OTP valid)', async () => {
+    it('throws 401 when password is wrong — does NOT consume OTP', async () => {
       const hashed = await bcrypt.hash('correct', 10);
       (userService.findByEmailOrPhone as jest.Mock).mockResolvedValue({
         ...mockUser,
         password: hashed,
       });
-      otpService.verify.mockResolvedValue({ verified: true });
 
       await expect(
-        service.login({ username: 'test@example.com', password: 'wrong', otp: '123456' }, makeMockRes().res),
+        service.login(
+          { username: 'test@example.com', password: 'wrong', otp: '123456' },
+          makeMockRes().res,
+        ),
       ).rejects.toMatchObject({ status: HttpStatus.UNAUTHORIZED });
+
+      expect(otpService.consumeOtp).not.toHaveBeenCalled();
     });
 
-    it('throws 403 when account is not verified', async () => {
+    it('throws 403 when account is not verified — does NOT consume OTP', async () => {
       const hashed = await bcrypt.hash('pw', 10);
       (userService.findByEmailOrPhone as jest.Mock).mockResolvedValue({
         ...mockUser,
         password: hashed,
         isVerified: false,
       });
-      otpService.verify.mockResolvedValue({ verified: true });
 
       await expect(
-        service.login({ username: 'test@example.com', password: 'pw', otp: '123456' }, makeMockRes().res),
+        service.login(
+          { username: 'test@example.com', password: 'pw', otp: '123456' },
+          makeMockRes().res,
+        ),
       ).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
+
+      expect(otpService.consumeOtp).not.toHaveBeenCalled();
     });
 
-    it('throws 403 when account is banned', async () => {
+    it('throws 403 when account is banned — does NOT consume OTP', async () => {
       const hashed = await bcrypt.hash('pw', 10);
       (userService.findByEmailOrPhone as jest.Mock).mockResolvedValue({
         ...mockUser,
         password: hashed,
         isBanned: true,
       });
-      otpService.verify.mockResolvedValue({ verified: true });
 
       await expect(
-        service.login({ username: 'test@example.com', password: 'pw', otp: '123456' }, makeMockRes().res),
+        service.login(
+          { username: 'test@example.com', password: 'pw', otp: '123456' },
+          makeMockRes().res,
+        ),
       ).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
+
+      expect(otpService.consumeOtp).not.toHaveBeenCalled();
     });
 
-    it('returns accessToken and user on valid credentials + OTP', async () => {
+    it('returns accessToken and user on valid credentials + OTP, and consumes OTP', async () => {
       const hashed = await bcrypt.hash('password123', 10);
       (userService.findByEmailOrPhone as jest.Mock).mockResolvedValue({
         ...mockUser,
         password: hashed,
       });
-      otpService.verify.mockResolvedValue({ verified: true });
       const { res, cookieFn } = makeMockRes();
 
       const result = await service.login(
-        { username: 'test@example.com', password: 'password123', otp: '123456' },
+        {
+          username: 'test@example.com',
+          password: 'password123',
+          otp: '123456',
+        },
         res,
       );
 
       expect(result.accessToken).toBeDefined();
       expect(result.user).toBeDefined();
+      expect(otpService.consumeOtp).toHaveBeenCalledWith(mockUser.phone);
       expect(cookieFn).toHaveBeenCalledWith(
         'refresh_token',
         expect.any(String),
@@ -156,7 +187,6 @@ describe('AuthService', () => {
         ...mockUser,
         password: hashed,
       });
-      otpService.verify.mockResolvedValue({ verified: true });
 
       const result = await service.login(
         { username: 'test@example.com', password: 'pw', otp: '123456' },
@@ -175,10 +205,12 @@ describe('AuthService', () => {
         ...mockUser,
         password: hashed,
       });
-      otpService.verify.mockResolvedValue({ verified: true });
       const { res, cookieFn } = makeMockRes();
 
-      await service.login({ username: 'test@example.com', password: 'pw', otp: '123456' }, res);
+      await service.login(
+        { username: 'test@example.com', password: 'pw', otp: '123456' },
+        res,
+      );
 
       expect(cookieFn).toHaveBeenCalledWith(
         'refresh_token',
@@ -192,13 +224,17 @@ describe('AuthService', () => {
 
   describe('refresh', () => {
     it('throws 401 when no token provided', async () => {
-      await expect(service.refresh('', makeMockRes().res)).rejects.toMatchObject({
+      await expect(
+        service.refresh('', makeMockRes().res),
+      ).rejects.toMatchObject({
         status: HttpStatus.UNAUTHORIZED,
       });
     });
 
     it('throws 401 when token is invalid', async () => {
-      await expect(service.refresh('bad.token.here', makeMockRes().res)).rejects.toMatchObject({
+      await expect(
+        service.refresh('bad.token.here', makeMockRes().res),
+      ).rejects.toMatchObject({
         status: HttpStatus.UNAUTHORIZED,
       });
     });
@@ -209,7 +245,9 @@ describe('AuthService', () => {
         process.env.REFRESH_TOKEN_SECRET || 'default_refresh_secret',
         { expiresIn: '0s' },
       );
-      await expect(service.refresh(expired, makeMockRes().res)).rejects.toMatchObject({
+      await expect(
+        service.refresh(expired, makeMockRes().res),
+      ).rejects.toMatchObject({
         status: HttpStatus.UNAUTHORIZED,
       });
     });
@@ -222,7 +260,9 @@ describe('AuthService', () => {
       );
       userRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.refresh(token, makeMockRes().res)).rejects.toMatchObject({
+      await expect(
+        service.refresh(token, makeMockRes().res),
+      ).rejects.toMatchObject({
         status: HttpStatus.UNAUTHORIZED,
       });
     });
@@ -274,14 +314,23 @@ describe('AuthService', () => {
       userRepo.findOne.mockResolvedValue(mockUser);
 
       await expect(
-        service.register({ username: 'test@example.com', password: 'pw', otp: '' }, makeMockRes().res),
+        service.register(
+          { username: 'test@example.com', password: 'pw', otp: '' },
+          makeMockRes().res,
+        ),
       ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
     });
 
     it('creates a new user and returns DTO', async () => {
       userRepo.findOne.mockResolvedValue(null);
-      userRepo.create.mockReturnValue({ ...mockUser, email: 'new@example.com' });
-      userRepo.save.mockResolvedValue({ ...mockUser, email: 'new@example.com' });
+      userRepo.create.mockReturnValue({
+        ...mockUser,
+        email: 'new@example.com',
+      });
+      userRepo.save.mockResolvedValue({
+        ...mockUser,
+        email: 'new@example.com',
+      });
 
       const result = await service.register(
         { username: 'new@example.com', password: 'secure', otp: '' },
@@ -307,7 +356,10 @@ describe('AuthService', () => {
     });
 
     it('defaults roles to empty array when userRoles is undefined', () => {
-      const token = service.generateAccessToken({ ...mockUser, userRoles: undefined });
+      const token = service.generateAccessToken({
+        ...mockUser,
+        userRoles: undefined,
+      });
       const decoded = jwt.decode(token) as jwt.JwtPayload;
       expect(decoded.roles).toEqual([]);
     });
