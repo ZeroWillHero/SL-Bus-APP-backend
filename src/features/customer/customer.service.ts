@@ -10,6 +10,8 @@ import { CreateCustomerDto } from './dto/create-customer.dto';
 import { CustomerDTO } from './dto/customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 import { Customer } from './entities/customer.entity';
+import { CustomerFilterDto } from './dto/customer-filter.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
 
 @Injectable()
 export class CustomerService {
@@ -87,11 +89,31 @@ export class CustomerService {
     }
   }
 
-  async findAll(): Promise<CustomerDTO[]> {
-    const customers = await this.customerRepository.find({
-      relations: ['user'],
-    });
-    return customers.map((customer) => this.convertToDTO(customer));
+  async findAll(
+    filters: CustomerFilterDto = {},
+  ): Promise<{ items: CustomerDTO[]; total: number }> {
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+
+    const qb = this.customerRepository
+      .createQueryBuilder('customer')
+      .leftJoinAndSelect('customer.user', 'user');
+
+    if (filters.search) {
+      qb.andWhere(
+        '(customer.firstName ILIKE :s OR customer.lastName ILIKE :s OR user.email ILIKE :s OR customer.contactNumber ILIKE :s)',
+        { s: `%${filters.search}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const customers = await qb
+      .orderBy('customer.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return { items: customers.map((c) => this.convertToDTO(c)), total };
   }
 
   async findOne(id: string): Promise<CustomerDTO> {

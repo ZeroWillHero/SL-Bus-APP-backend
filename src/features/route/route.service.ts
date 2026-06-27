@@ -12,6 +12,8 @@ import { RouteDto } from './dto/route.dto';
 import { RouteStopDto } from './dto/route-stop.dto';
 import { CreateRouteStopDto } from './dto/create-route-stop.dto';
 import { UpdateRouteStopDto } from './dto/update-route-stop.dto';
+import { RouteFilterDto } from './dto/route-filter.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
 
 @Injectable()
 export class RouteService {
@@ -42,12 +44,46 @@ export class RouteService {
     return this.toDto(saved);
   }
 
-  async findAllByOwner(ownerId: string): Promise<RouteDto[]> {
-    const routes = await this.routeRepo.find({
-      where: { owner: { id: ownerId } },
-      relations: ['owner', 'bus', 'stops'],
-    });
-    return routes.map((r) => this.toDto(r));
+  async findAllByOwner(
+    ownerId: string,
+    filters: RouteFilterDto = {},
+  ): Promise<{ items: RouteDto[]; total: number }> {
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+    const sortOrder = filters.sortOrder ?? 'DESC';
+
+    const qb = this.routeRepo
+      .createQueryBuilder('route')
+      .leftJoinAndSelect('route.owner', 'owner')
+      .leftJoinAndSelect('route.bus', 'bus')
+      .leftJoinAndSelect('route.stops', 'stops')
+      .where('owner.id = :ownerId', { ownerId });
+
+    if (filters.origin) {
+      qb.andWhere('route.origin ILIKE :origin', {
+        origin: `%${filters.origin}%`,
+      });
+    }
+    if (filters.destination) {
+      qb.andWhere('route.destination ILIKE :destination', {
+        destination: `%${filters.destination}%`,
+      });
+    }
+    if (filters.search) {
+      qb.andWhere(
+        '(route.origin ILIKE :search OR route.destination ILIKE :search)',
+        { search: `%${filters.search}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const routes = await qb
+      .orderBy('route.createdAt', sortOrder)
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return { items: routes.map((r) => this.toDto(r)), total };
   }
 
   async findOne(routeId: string, ownerId: string): Promise<RouteDto> {
@@ -94,7 +130,11 @@ export class RouteService {
     return this.toDto(route);
   }
 
-  async assignToBus(routeId: string, busId: string, ownerId: string): Promise<RouteDto> {
+  async assignToBus(
+    routeId: string,
+    busId: string,
+    ownerId: string,
+  ): Promise<RouteDto> {
     const route = await this.routeRepo.findOne({
       where: { id: routeId, owner: { id: ownerId } },
       relations: ['owner', 'bus', 'stops'],
@@ -111,14 +151,21 @@ export class RouteService {
     return this.toDto(route);
   }
 
-  async unassignFromBus(routeId: string, busId: string, ownerId: string): Promise<RouteDto> {
+  async unassignFromBus(
+    routeId: string,
+    busId: string,
+    ownerId: string,
+  ): Promise<RouteDto> {
     const route = await this.routeRepo.findOne({
       where: { id: routeId, owner: { id: ownerId } },
       relations: ['owner', 'bus', 'stops'],
     });
     if (!route) throw new AppError('Route not found', HttpStatus.NOT_FOUND);
     if (route.bus?.id !== busId) {
-      throw new AppError('Route is not assigned to this bus', HttpStatus.BAD_REQUEST);
+      throw new AppError(
+        'Route is not assigned to this bus',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     route.bus = null;
@@ -136,7 +183,11 @@ export class RouteService {
 
   // ─── Stop management ─────────────────────────────────────────────────────────
 
-  async addStop(routeId: string, ownerId: string, dto: CreateRouteStopDto): Promise<RouteStopDto> {
+  async addStop(
+    routeId: string,
+    ownerId: string,
+    dto: CreateRouteStopDto,
+  ): Promise<RouteStopDto> {
     const route = await this.routeRepo.findOne({
       where: { id: routeId, owner: { id: ownerId } },
       relations: ['owner'],
@@ -194,7 +245,11 @@ export class RouteService {
     return this.toStopDto(stop);
   }
 
-  async removeStop(routeId: string, stopId: string, ownerId: string): Promise<void> {
+  async removeStop(
+    routeId: string,
+    stopId: string,
+    ownerId: string,
+  ): Promise<void> {
     const route = await this.routeRepo.findOne({
       where: { id: routeId, owner: { id: ownerId } },
       relations: ['owner'],
@@ -222,7 +277,9 @@ export class RouteService {
   }
 
   toDto(route: Route): RouteDto {
-    const sortedStops = (route.stops ?? []).sort((a, b) => a.stopOrder - b.stopOrder);
+    const sortedStops = (route.stops ?? []).sort(
+      (a, b) => a.stopOrder - b.stopOrder,
+    );
     return {
       id: route.id,
       origin: route.origin,

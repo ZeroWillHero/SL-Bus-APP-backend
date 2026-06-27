@@ -6,19 +6,32 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { CustomerService } from './customer.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
-import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { CustomerFilterDto } from './dto/customer-filter.dto';
+import {
+  ApiExtraModels,
+  ApiOkResponse,
+  ApiOperation,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
+import { PageResponseDTO } from '../../utils/common/dto/pageResponse.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
+import { paginatedSchema } from '../../utils/common/swagger/paginated-schema';
 import { CustomerDTO } from './dto/customer.dto';
 import { Public } from '../../common/decorators/public.decorator';
+import { Roles } from '../../common/decorators/roles.decorator';
 
+@ApiExtraModels(CustomerDTO)
 @Controller('api/v1/customer')
 @ApiTags('Customer')
 export class CustomerController {
-  constructor(private readonly customerService: CustomerService) { }
+  constructor(private readonly customerService: CustomerService) {}
 
   @Public()
   @Post()
@@ -36,14 +49,22 @@ export class CustomerController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'Get all customers' })
-  @ApiResponse({ status: 200, description: 'Customers fetched successfully' })
-  async findAll(): Promise<ResponseDTO<CustomerDTO[]>> {
-    const result = await this.customerService.findAll();
-    return new ResponseDTO<CustomerDTO[]>(
+  @Roles('Admin')
+  @ApiOperation({
+    summary:
+      'List all customers with pagination and search filters (Admin only)',
+  })
+  @ApiOkResponse({ schema: paginatedSchema(CustomerDTO) })
+  async findAll(
+    @Query() filters: CustomerFilterDto,
+  ): Promise<ResponseDTO<PageResponseDTO<CustomerDTO>>> {
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+    const { items, total } = await this.customerService.findAll(filters);
+    return new ResponseDTO(
       true,
       'Customers fetched successfully',
-      result,
+      new PageResponseDTO(items, total, page, limit),
     );
   }
 

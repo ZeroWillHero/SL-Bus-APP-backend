@@ -14,6 +14,7 @@ import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiExtraModels,
   ApiOkResponse,
   ApiOperation,
   ApiQuery,
@@ -26,23 +27,32 @@ import { UserService } from '../user/user.service';
 import { UserDTO } from '../user/dto/user.dto';
 import { BusService } from '../bus/bus.service';
 import { BusDto } from '../bus/dto/bus.dto';
+import { BusFilterDto } from '../bus/dto/bus-filter.dto';
 import { BusDocumentDto } from '../bus/dto/bus-document.dto';
 import { RejectBusDto } from '../bus/dto/reject-bus.dto';
 import { PaymentService } from '../payment/payment.service';
-import { AdminPaymentDto, AdminPaymentPageDto, PaymentStatsDto } from '../payment/dto/admin-payment.dto';
+import {
+  AdminPaymentDto,
+  AdminPaymentPageDto,
+  PaymentStatsDto,
+} from '../payment/dto/admin-payment.dto';
 import { PaymentStatus } from '../payment/enums/payment-status.enum';
 import { PaymentMethod } from '../payment/enums/payment-method.enum';
 import { CouponService } from '../coupon/coupon.service';
 import { CouponDto } from '../coupon/dto/coupon.dto';
+import { CouponFilterDto } from '../coupon/dto/coupon-filter.dto';
 import { CreateCouponDto } from '../coupon/dto/create-coupon.dto';
 import { UpdateCouponDto } from '../coupon/dto/update-coupon.dto';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
+import { PageResponseDTO } from '../../utils/common/dto/pageResponse.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
+import { paginatedSchema } from '../../utils/common/swagger/paginated-schema';
 import { Roles } from '../../common/decorators/roles.decorator';
-import { ApprovalStatus } from '../bus/enums/approval-status.enum';
 
 @ApiTags('Admin')
 @ApiBearerAuth()
 @Roles('Admin')
+@ApiExtraModels(BusDto, CouponDto)
 @Controller('api/v1/admin')
 export class AdminController {
   constructor(
@@ -51,7 +61,7 @@ export class AdminController {
     private readonly paymentService: PaymentService,
     private readonly couponService: CouponService,
     private readonly userService: UserService,
-  ) { }
+  ) {}
 
   // ─── User Management ─────────────────────────────────────────────────────────
 
@@ -115,8 +125,7 @@ export class AdminController {
   // ─── Bus Owner ────────────────────────────────────────────────────────────────
   @Get('bus-owners')
   @ApiOperation({
-    summary:
-      'List bus owners (paginated, filterable, sortable by createdAt)',
+    summary: 'List bus owners (paginated, filterable, sortable by createdAt)',
   })
   @ApiQuery({
     name: 'search',
@@ -168,7 +177,9 @@ export class AdminController {
   @Get('bus-owners/:id')
   @ApiOperation({ summary: 'Get bus owner detail' })
   @ApiOkResponse({ type: BusOwnerDto })
-  async getBusOwner(@Param('id') id: string): Promise<ResponseDTO<BusOwnerDto>> {
+  async getBusOwner(
+    @Param('id') id: string,
+  ): Promise<ResponseDTO<BusOwnerDto>> {
     const result = await this.busOwnerService.findById(id);
     return new ResponseDTO(true, 'Bus owner fetched successfully', result);
   }
@@ -176,7 +187,9 @@ export class AdminController {
   @Post('bus-owners/:id/approve')
   @ApiOperation({ summary: 'Approve a bus owner' })
   @ApiOkResponse({ type: BusOwnerDto })
-  async approveBusOwner(@Param('id') id: string): Promise<ResponseDTO<BusOwnerDto>> {
+  async approveBusOwner(
+    @Param('id') id: string,
+  ): Promise<ResponseDTO<BusOwnerDto>> {
     const result = await this.busOwnerService.approve(id);
     return new ResponseDTO(true, 'Bus owner approved successfully', result);
   }
@@ -195,14 +208,21 @@ export class AdminController {
   // ─── Bus Management ───────────────────────────────────────────────────────────
 
   @Get('buses')
-  @ApiOperation({ summary: 'List all buses, optionally filtered by approval status' })
-  @ApiQuery({ name: 'status', enum: ApprovalStatus, required: false })
-  @ApiOkResponse({ type: [BusDto] })
+  @ApiOperation({
+    summary: 'List all buses (paginated, filterable by status and search)',
+  })
+  @ApiOkResponse({ schema: paginatedSchema(BusDto) })
   async listBuses(
-    @Query('status') status?: ApprovalStatus,
-  ): Promise<ResponseDTO<BusDto[]>> {
-    const result = await this.busService.findAll(status);
-    return new ResponseDTO(true, 'Buses fetched successfully', result);
+    @Query() filters: BusFilterDto,
+  ): Promise<ResponseDTO<PageResponseDTO<BusDto>>> {
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+    const { items, total } = await this.busService.findAll(filters);
+    return new ResponseDTO(
+      true,
+      'Buses fetched successfully',
+      new PageResponseDTO(items, total, page, limit),
+    );
   }
 
   @Get('buses/:id')
@@ -251,7 +271,11 @@ export class AdminController {
     @Param('docId') docId: string,
   ): Promise<ResponseDTO<BusDocumentDto>> {
     const user = req.user as AuthenticatedUser;
-    const result = await this.busService.verifyDocument(busId, docId, user.userId);
+    const result = await this.busService.verifyDocument(
+      busId,
+      docId,
+      user.userId,
+    );
     return new ResponseDTO(true, 'Document verified successfully', result);
   }
 
@@ -324,11 +348,22 @@ export class AdminController {
   }
 
   @Get('coupons')
-  @ApiOperation({ summary: 'List all coupons' })
-  @ApiOkResponse({ type: [CouponDto] })
-  async listCoupons(): Promise<ResponseDTO<CouponDto[]>> {
-    const result = await this.couponService.findAll();
-    return new ResponseDTO(true, 'Coupons fetched successfully', result);
+  @ApiOperation({
+    summary:
+      'List all coupons (paginated, filterable by code and active status)',
+  })
+  @ApiOkResponse({ schema: paginatedSchema(CouponDto) })
+  async listCoupons(
+    @Query() filters: CouponFilterDto,
+  ): Promise<ResponseDTO<PageResponseDTO<CouponDto>>> {
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+    const { items, total } = await this.couponService.findAll(filters);
+    return new ResponseDTO(
+      true,
+      'Coupons fetched successfully',
+      new PageResponseDTO(items, total, page, limit),
+    );
   }
 
   @Get('coupons/:id')

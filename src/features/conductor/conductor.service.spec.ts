@@ -76,6 +76,7 @@ describe('ConductorService', () => {
     save: jest.Mock;
     remove: jest.Mock;
     merge: jest.Mock;
+    createQueryBuilder: jest.Mock;
   };
   let userService: { getByEmail: jest.Mock; create: jest.Mock };
   let smsService: { sendSMS: jest.Mock };
@@ -87,7 +88,10 @@ describe('ConductorService', () => {
       findOne: jest.fn(),
       save: jest.fn(),
       remove: jest.fn(),
-      merge: jest.fn().mockImplementation((target, source) => ({ ...target, ...source })),
+      merge: jest
+        .fn()
+        .mockImplementation((target, source) => ({ ...target, ...source })),
+      createQueryBuilder: jest.fn(),
     };
     userService = {
       getByEmail: jest.fn(),
@@ -240,7 +244,9 @@ describe('ConductorService', () => {
 
       userService.getByEmail.mockRejectedValue(new Error('DB connection lost'));
 
-      await expect(service.create(makeCreateDto())).rejects.toThrow('DB connection lost');
+      await expect(service.create(makeCreateDto())).rejects.toThrow(
+        'DB connection lost',
+      );
       expect(qr.rollbackTransaction).toHaveBeenCalled();
       expect(qr.release).toHaveBeenCalled();
     });
@@ -248,21 +254,37 @@ describe('ConductorService', () => {
 
   // ─── findAll ───────────────────────────────────────────────────────────────
 
+  const makeQb = (conductors: unknown[]) => {
+    const qb: Record<string, jest.Mock> = {};
+    qb.leftJoinAndSelect = jest.fn().mockReturnValue(qb);
+    qb.where = jest.fn().mockReturnValue(qb);
+    qb.andWhere = jest.fn().mockReturnValue(qb);
+    qb.orderBy = jest.fn().mockReturnValue(qb);
+    qb.skip = jest.fn().mockReturnValue(qb);
+    qb.take = jest.fn().mockReturnValue(qb);
+    qb.getCount = jest.fn().mockResolvedValue(conductors.length);
+    qb.getMany = jest.fn().mockResolvedValue(conductors);
+    return qb;
+  };
+
   describe('findAll', () => {
-    it('returns all conductors as DTOs', async () => {
-      conductorRepo.find.mockResolvedValue([mockConductorEntity]);
+    it('returns all conductors as paginated DTOs', async () => {
+      conductorRepo.createQueryBuilder.mockReturnValue(
+        makeQb([mockConductorEntity]),
+      );
 
-      const result = await service.findAll();
+      const result = await service.findAll({});
 
-      expect(conductorRepo.find).toHaveBeenCalledWith({ relations: ['user', 'busOwner'] });
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('conductor-uuid');
+      expect(result.total).toBe(1);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('conductor-uuid');
     });
 
-    it('returns empty array when no conductors exist', async () => {
-      conductorRepo.find.mockResolvedValue([]);
-      const result = await service.findAll();
-      expect(result).toEqual([]);
+    it('returns empty items when no conductors exist', async () => {
+      conductorRepo.createQueryBuilder.mockReturnValue(makeQb([]));
+      const result = await service.findAll({});
+      expect(result.total).toBe(0);
+      expect(result.items).toEqual([]);
     });
   });
 
@@ -270,16 +292,14 @@ describe('ConductorService', () => {
 
   describe('findAllByOwner', () => {
     it('returns only conductors belonging to the given bus owner', async () => {
-      conductorRepo.find.mockResolvedValue([mockConductorEntity]);
-
-      const result = await service.findAllByOwner('owner-uuid');
-
-      expect(conductorRepo.find).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { busOwner: { id: 'owner-uuid' } },
-        }),
+      conductorRepo.createQueryBuilder.mockReturnValue(
+        makeQb([mockConductorEntity]),
       );
-      expect(result).toHaveLength(1);
+
+      const result = await service.findAllByOwner('owner-uuid', {});
+
+      expect(result.total).toBe(1);
+      expect(result.items).toHaveLength(1);
     });
   });
 
@@ -332,9 +352,14 @@ describe('ConductorService', () => {
   describe('update', () => {
     it('merges and saves updated fields', async () => {
       conductorRepo.findOne.mockResolvedValue(mockConductorEntity);
-      conductorRepo.save.mockResolvedValue({ ...mockConductorEntity, firstName: 'Jane' });
+      conductorRepo.save.mockResolvedValue({
+        ...mockConductorEntity,
+        firstName: 'Jane',
+      });
 
-      const result = await service.update('conductor-uuid', { firstName: 'Jane' });
+      const result = await service.update('conductor-uuid', {
+        firstName: 'Jane',
+      });
 
       expect(conductorRepo.save).toHaveBeenCalled();
       expect(result.firstName).toBe('Jane');
@@ -343,7 +368,9 @@ describe('ConductorService', () => {
     it('throws 404 when conductor not found', async () => {
       conductorRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.update('missing', { firstName: 'Jane' })).rejects.toMatchObject({
+      await expect(
+        service.update('missing', { firstName: 'Jane' }),
+      ).rejects.toMatchObject({
         status: HttpStatus.NOT_FOUND,
       });
     });
@@ -390,7 +417,10 @@ describe('ConductorService', () => {
     });
 
     it('sets busOwnerId from busOwner relation', () => {
-      const conductor = { ...mockConductorEntity, busOwner: { id: 'owner-uuid' } as any };
+      const conductor = {
+        ...mockConductorEntity,
+        busOwner: { id: 'owner-uuid' } as any,
+      };
       const dto = service.convertToDTO(conductor);
       expect(dto.busOwnerId).toBe('owner-uuid');
     });

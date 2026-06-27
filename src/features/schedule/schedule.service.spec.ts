@@ -61,13 +61,21 @@ describe('ScheduleService', () => {
   let routeRepo: { findOne: jest.Mock };
   let routeService: { toDto: jest.Mock };
 
-  const makeQb = (result: unknown) => ({
-    innerJoinAndSelect: jest.fn().mockReturnThis(),
-    where: jest.fn().mockReturnThis(),
-    andWhere: jest.fn().mockReturnThis(),
-    getOne: jest.fn().mockResolvedValue(result),
-    getMany: jest.fn().mockResolvedValue(result),
-  });
+  const makeQb = (result: unknown) => {
+    const arr = Array.isArray(result) ? result : result ? [result] : [];
+    const qb: Record<string, jest.Mock> = {};
+    qb.innerJoinAndSelect = jest.fn().mockReturnValue(qb);
+    qb.leftJoinAndSelect = jest.fn().mockReturnValue(qb);
+    qb.where = jest.fn().mockReturnValue(qb);
+    qb.andWhere = jest.fn().mockReturnValue(qb);
+    qb.orderBy = jest.fn().mockReturnValue(qb);
+    qb.skip = jest.fn().mockReturnValue(qb);
+    qb.take = jest.fn().mockReturnValue(qb);
+    qb.getOne = jest.fn().mockResolvedValue(Array.isArray(result) ? result[0] ?? null : result);
+    qb.getMany = jest.fn().mockResolvedValue(arr);
+    qb.getCount = jest.fn().mockResolvedValue(arr.length);
+    return qb;
+  };
 
   beforeEach(async () => {
     scheduleRepo = {
@@ -166,11 +174,12 @@ describe('ScheduleService', () => {
   // ─── findAll ──────────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('returns schedules for the owner', async () => {
+    it('returns paginated schedules for the owner', async () => {
       scheduleRepo.createQueryBuilder.mockReturnValue(makeQb([mockSchedule]));
       const result = await service.findAll('owner-uuid', {});
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('schedule-uuid');
+      expect(result.total).toBe(1);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('schedule-uuid');
     });
   });
 

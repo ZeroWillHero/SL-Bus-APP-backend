@@ -64,6 +64,7 @@ describe('CustomerService', () => {
     save: jest.Mock;
     remove: jest.Mock;
     merge: jest.Mock;
+    createQueryBuilder: jest.Mock;
   };
   let userService: {
     getByEmail: jest.Mock;
@@ -79,7 +80,10 @@ describe('CustomerService', () => {
       findOne: jest.fn(),
       save: jest.fn(),
       remove: jest.fn(),
-      merge: jest.fn().mockImplementation((target, source) => ({ ...target, ...source })),
+      merge: jest
+        .fn()
+        .mockImplementation((target, source) => ({ ...target, ...source })),
+      createQueryBuilder: jest.fn(),
     };
     userService = {
       getByEmail: jest.fn(),
@@ -184,19 +188,37 @@ describe('CustomerService', () => {
   // ─── findAll ───────────────────────────────────────────────────────────────
 
   describe('findAll', () => {
-    it('returns all customers as DTOs', async () => {
-      customerRepo.find.mockResolvedValue([mockCustomerEntity]);
+    const makeQb = (customers: unknown[]) => {
+      const qb: Record<string, jest.Mock> = {};
+      qb.leftJoinAndSelect = jest.fn().mockReturnValue(qb);
+      qb.andWhere = jest.fn().mockReturnValue(qb);
+      qb.orderBy = jest.fn().mockReturnValue(qb);
+      qb.skip = jest.fn().mockReturnValue(qb);
+      qb.take = jest.fn().mockReturnValue(qb);
+      qb.getCount = jest.fn().mockResolvedValue(customers.length);
+      qb.getMany = jest.fn().mockResolvedValue(customers);
+      return qb;
+    };
 
-      const result = await service.findAll();
+    it('returns paginated customers as DTOs', async () => {
+      const qb = makeQb([mockCustomerEntity]);
+      (customerRepo as any).createQueryBuilder = jest.fn().mockReturnValue(qb);
 
-      expect(customerRepo.find).toHaveBeenCalledWith({ relations: ['user'] });
-      expect(result).toHaveLength(1);
-      expect(result[0].id).toBe('customer-uuid');
+      const result = await service.findAll({});
+
+      expect(result.total).toBe(1);
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('customer-uuid');
     });
 
-    it('returns empty array when no customers', async () => {
-      customerRepo.find.mockResolvedValue([]);
-      expect(await service.findAll()).toEqual([]);
+    it('returns empty items when no customers', async () => {
+      const qb = makeQb([]);
+      (customerRepo as any).createQueryBuilder = jest.fn().mockReturnValue(qb);
+
+      const result = await service.findAll({});
+
+      expect(result.total).toBe(0);
+      expect(result.items).toEqual([]);
     });
   });
 
@@ -243,11 +265,16 @@ describe('CustomerService', () => {
 
   describe('update', () => {
     it('merges partial fields and saves', async () => {
-      const entity = { ...mockCustomerEntity, user: { ...mockCustomerEntity.user, updatedAt: new Date() } as any };
+      const entity = {
+        ...mockCustomerEntity,
+        user: { ...mockCustomerEntity.user, updatedAt: new Date() } as any,
+      };
       customerRepo.findOne.mockResolvedValue(entity);
       customerRepo.save.mockResolvedValue({ ...entity, firstName: 'Alicia' });
 
-      const result = await service.update('customer-uuid', { firstName: 'Alicia' });
+      const result = await service.update('customer-uuid', {
+        firstName: 'Alicia',
+      });
 
       expect(customerRepo.save).toHaveBeenCalled();
       expect(result.firstName).toBe('Alicia');
@@ -296,7 +323,9 @@ describe('CustomerService', () => {
 
     it('includes user DTO when user relation is loaded', () => {
       service.convertToDTO(mockCustomerEntity);
-      expect(userService.convertToDTO).toHaveBeenCalledWith(mockCustomerEntity.user);
+      expect(userService.convertToDTO).toHaveBeenCalledWith(
+        mockCustomerEntity.user,
+      );
     });
   });
 });

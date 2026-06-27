@@ -8,6 +8,8 @@ import { DiscountType } from './enums/discount-type.enum';
 import { CouponDto, CouponValidationDto } from './dto/coupon.dto';
 import { CreateCouponDto } from './dto/create-coupon.dto';
 import { UpdateCouponDto } from './dto/update-coupon.dto';
+import { CouponFilterDto } from './dto/coupon-filter.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
 
 @Injectable()
 export class CouponService {
@@ -36,9 +38,32 @@ export class CouponService {
     return this.toDto(saved);
   }
 
-  async findAll(): Promise<CouponDto[]> {
-    const coupons = await this.couponRepo.find({ order: { createdAt: 'DESC' } });
-    return coupons.map((c) => this.toDto(c));
+  async findAll(
+    filters: CouponFilterDto = {},
+  ): Promise<{ items: CouponDto[]; total: number }> {
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+
+    const qb = this.couponRepo.createQueryBuilder('coupon');
+
+    if (filters.search) {
+      qb.andWhere('coupon.code ILIKE :s', { s: `%${filters.search}%` });
+    }
+
+    if (filters.isActive !== undefined && filters.isActive !== '') {
+      qb.andWhere('coupon.isActive = :active', {
+        active: filters.isActive === 'true',
+      });
+    }
+
+    const total = await qb.getCount();
+    const coupons = await qb
+      .orderBy('coupon.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return { items: coupons.map((c) => this.toDto(c)), total };
   }
 
   async findOne(id: string): Promise<CouponDto> {
@@ -74,12 +99,18 @@ export class CouponService {
       where: { code: code.toUpperCase(), isActive: true },
     });
     if (!coupon) {
-      throw new AppError('Invalid or inactive coupon code', HttpStatus.BAD_REQUEST);
+      throw new AppError(
+        'Invalid or inactive coupon code',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const today = new Date().toISOString().substring(0, 10);
     if (today < coupon.validFrom || today > coupon.validUntil) {
-      throw new AppError('Coupon is expired or not yet valid', HttpStatus.BAD_REQUEST);
+      throw new AppError(
+        'Coupon is expired or not yet valid',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     if (coupon.usageLimit !== null && coupon.usedCount >= coupon.usageLimit) {
@@ -97,7 +128,10 @@ export class CouponService {
       where: { coupon: { id: coupon.id }, customer: { id: customerId } },
     });
     if (customerUsageCount >= coupon.perUserLimit) {
-      throw new AppError('You have already used this coupon', HttpStatus.BAD_REQUEST);
+      throw new AppError(
+        'You have already used this coupon',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const discountAmount = this.calculateDiscount(coupon, fare);
@@ -144,7 +178,8 @@ export class CouponService {
       discountType: coupon.discountType,
       discountValue: Number(coupon.discountValue),
       minFare: coupon.minFare !== null ? Number(coupon.minFare) : null,
-      maxDiscount: coupon.maxDiscount !== null ? Number(coupon.maxDiscount) : null,
+      maxDiscount:
+        coupon.maxDiscount !== null ? Number(coupon.maxDiscount) : null,
       usageLimit: coupon.usageLimit,
       usedCount: coupon.usedCount,
       perUserLimit: coupon.perUserLimit,
