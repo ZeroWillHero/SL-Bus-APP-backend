@@ -6,10 +6,7 @@ import { CouponUsage } from './entities/coupon-usage.entity';
 import { CustomerModule } from '../customer/customer.module';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Coupon, CouponUsage]),
-    CustomerModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Coupon, CouponUsage]), CustomerModule],
   providers: [CouponService],
   exports: [CouponService],
 })

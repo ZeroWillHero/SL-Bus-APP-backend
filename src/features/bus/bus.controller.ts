@@ -14,10 +14,10 @@ import {
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiExtraModels,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
-  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import type { Request } from 'express';
@@ -26,6 +26,7 @@ import { AssignmentService } from './assignment.service';
 import { CreateBusDto } from './dto/create-bus.dto';
 import { UpdateBusDto } from './dto/update-bus.dto';
 import { BusDto } from './dto/bus.dto';
+import { BusFilterDto } from './dto/bus-filter.dto';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { BusDocumentDto } from './dto/bus-document.dto';
 import { BusAssignmentDto } from './dto/bus-assignment.dto';
@@ -33,6 +34,9 @@ import { RouteDto } from '../route/dto/route.dto';
 import { RouteService } from '../route/route.service';
 import { ConductorService } from '../conductor/conductor.service';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
+import { PageResponseDTO } from '../../utils/common/dto/pageResponse.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
+import { paginatedSchema } from '../../utils/common/swagger/paginated-schema';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { ApprovalStatus } from './enums/approval-status.enum';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
@@ -40,6 +44,7 @@ import { BusOwnerService } from '../bus-owner/bus-owner.service';
 
 @ApiTags('Bus')
 @ApiBearerAuth()
+@ApiExtraModels(BusDto)
 @Controller('api/v1/buses')
 export class BusController {
   constructor(
@@ -65,34 +70,65 @@ export class BusController {
   }
 
   @Get()
-  @Roles('Admin', 'BusOwner', 'Conductor')
+  @Roles('Admin', 'BusOwner', 'Conductor', 'Customer')
   @ApiOperation({
     summary:
-      'List buses — Admin sees all, BusOwner sees own, Conductor sees assigned',
+      'List buses (paginated) — Admin/Customer see all (Customer: APPROVED only), BusOwner sees own, Conductor sees assigned',
   })
-  @ApiQuery({ name: 'status', enum: ApprovalStatus, required: false })
-  @ApiOkResponse({ type: [BusDto] })
+  @ApiOkResponse({ schema: paginatedSchema(BusDto) })
   async findAll(
     @Req() req: Request,
-    @Query('status') status?: ApprovalStatus,
-  ): Promise<ResponseDTO<BusDto[]>> {
+    @Query() filters: BusFilterDto,
+  ): Promise<ResponseDTO<PageResponseDTO<BusDto>>> {
     const user = req.user as AuthenticatedUser;
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
 
     if (user.roles.includes('Admin')) {
-      const result = await this.busService.findAll(status);
-      return new ResponseDTO(true, 'Buses fetched successfully', result);
+      const { items, total } = await this.busService.findAll(filters);
+      return new ResponseDTO(
+        true,
+        'Buses fetched successfully',
+        new PageResponseDTO(items, total, page, limit),
+      );
     }
 
     if (user.roles.includes('BusOwner')) {
       const owner = await this.busOwnerService.findByUserId(user.userId);
-      const result = await this.busService.findAllByOwner(owner.id, status);
-      return new ResponseDTO(true, 'Buses fetched successfully', result);
+      const { items, total } = await this.busService.findAllByOwner(
+        owner.id,
+        filters,
+      );
+      return new ResponseDTO(
+        true,
+        'Buses fetched successfully',
+        new PageResponseDTO(items, total, page, limit),
+      );
     }
 
-    // Conductor
+    if (user.roles.includes('Customer')) {
+      // Customers see only approved buses
+      const { items, total } = await this.busService.findAll({
+        ...filters,
+        status: ApprovalStatus.APPROVED,
+      });
+      return new ResponseDTO(
+        true,
+        'Buses fetched successfully',
+        new PageResponseDTO(items, total, page, limit),
+      );
+    }
+
+    // Conductor — returns assigned buses (bounded set, no pagination needed)
     const conductor = await this.conductorService.findByUserId(user.userId);
-    const result = await this.assignmentService.listBusesByConductor(conductor.id!);
-    return new ResponseDTO(true, 'Buses fetched successfully', result);
+    const buses = await this.assignmentService.listBusesByConductor(
+      conductor.id!,
+    );
+    return new ResponseDTO(
+      true,
+      'Buses fetched successfully',
+      new PageResponseDTO(buses, buses.length, 1, buses.length || 1),
+    );
   }
 
   @Get(':id')
@@ -212,8 +248,16 @@ export class BusController {
   ): Promise<ResponseDTO<RouteDto>> {
     const user = req.user as AuthenticatedUser;
     const owner = await this.busOwnerService.findByUserId(user.userId);
-    const result = await this.routeService.unassignFromBus(routeId, id, owner.id);
-    return new ResponseDTO(true, 'Route unassigned from bus successfully', result);
+    const result = await this.routeService.unassignFromBus(
+      routeId,
+      id,
+      owner.id,
+    );
+    return new ResponseDTO(
+      true,
+      'Route unassigned from bus successfully',
+      result,
+    );
   }
 
   // ─── Conductor Assignments ───────────────────────────────────────────────────

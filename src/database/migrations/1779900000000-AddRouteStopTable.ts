@@ -30,7 +30,9 @@ export class AddRouteStopTable1779900000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query(`ALTER TABLE route ADD COLUMN "viaStops" jsonb NOT NULL DEFAULT '[]'`);
+    await queryRunner.query(
+      `ALTER TABLE route ADD COLUMN "viaStops" jsonb NOT NULL DEFAULT '[]'`,
+    );
     await queryRunner.query(`DROP TABLE route_stop`);
   }
 }

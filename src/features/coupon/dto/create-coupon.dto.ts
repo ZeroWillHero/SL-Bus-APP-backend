@@ -11,19 +11,38 @@ export class CreateCouponDto {
   @ApiProperty({ enum: DiscountType })
   discountType!: DiscountType;
 
-  @ApiProperty({ example: 20, description: 'Percentage value or fixed LKR amount' })
+  @ApiProperty({
+    example: 20,
+    description: 'Percentage value or fixed LKR amount',
+  })
   discountValue!: number;
 
-  @ApiProperty({ required: false, nullable: true, description: 'Minimum fare required' })
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'Minimum fare required',
+  })
   minFare?: number;
 
-  @ApiProperty({ required: false, nullable: true, description: 'Maximum discount cap (for PERCENTAGE type)' })
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'Maximum discount cap (for PERCENTAGE type)',
+  })
   maxDiscount?: number;
 
-  @ApiProperty({ required: false, nullable: true, description: 'Total uses allowed (null = unlimited)' })
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    description: 'Total uses allowed (null = unlimited)',
+  })
   usageLimit?: number;
 
-  @ApiProperty({ required: false, default: 1, description: 'Max uses per customer' })
+  @ApiProperty({
+    required: false,
+    default: 1,
+    description: 'Max uses per customer',
+  })
   perUserLimit?: number;
 
   @ApiProperty({ example: '2026-01-01', description: 'YYYY-MM-DD' })

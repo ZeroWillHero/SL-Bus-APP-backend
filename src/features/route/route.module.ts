@@ -9,7 +9,10 @@ import { BusOwner } from '../bus-owner/entities/bus-owner.entity';
 import { BusOwnerModule } from '../bus-owner/bus-owner.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Route, RouteStop, Bus, BusOwner]), BusOwnerModule],
+  imports: [
+    TypeOrmModule.forFeature([Route, RouteStop, Bus, BusOwner]),
+    BusOwnerModule,
+  ],
   controllers: [RouteController],
   providers: [RouteService],
   exports: [RouteService],

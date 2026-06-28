@@ -88,7 +88,10 @@ describe('UserRolesService', () => {
       userRoleRepo.create.mockReturnValue(mockUserRole);
       userRoleRepo.save.mockResolvedValue({ id: 'user-role-uuid' });
 
-      const result = await service.create({ userId: 'user-uuid', roleId: 'role-uuid' });
+      const result = await service.create({
+        userId: 'user-uuid',
+        roleId: 'role-uuid',
+      });
 
       expect(result.userId).toBe('user-uuid');
       expect(result.roleId).toBe('role-uuid');
@@ -141,7 +144,9 @@ describe('UserRolesService', () => {
 
       await service.findAll({ userId: 'user-uuid' });
 
-      expect(qb.andWhere).toHaveBeenCalledWith('user.id = :userId', { userId: 'user-uuid' });
+      expect(qb.andWhere).toHaveBeenCalledWith('user.id = :userId', {
+        userId: 'user-uuid',
+      });
     });
 
     it('filters by roleId when provided', async () => {
@@ -150,7 +155,9 @@ describe('UserRolesService', () => {
 
       await service.findAll({ roleId: 'role-uuid' });
 
-      expect(qb.andWhere).toHaveBeenCalledWith('role.id = :roleId', { roleId: 'role-uuid' });
+      expect(qb.andWhere).toHaveBeenCalledWith('role.id = :roleId', {
+        roleId: 'role-uuid',
+      });
     });
 
     it('returns empty array when no records', async () => {
@@ -185,11 +192,19 @@ describe('UserRolesService', () => {
       const newUser = { id: 'new-user-uuid', email: 'bob@example.com' } as User;
 
       // Spread to avoid mutating the shared mockUserRole fixture
-      const existingCopy = { ...mockUserRole, user: { ...mockUserRole.user }, role: { ...mockUserRole.role } };
+      const existingCopy = {
+        ...mockUserRole,
+        user: { ...mockUserRole.user },
+        role: { ...mockUserRole.role },
+      };
       userRoleRepo.findOne
         .mockResolvedValueOnce(existingCopy) // existing record
         .mockResolvedValueOnce(null) // no conflict
-        .mockResolvedValueOnce({ ...mockUserRole, user: newUser, role: newRole }); // after save
+        .mockResolvedValueOnce({
+          ...mockUserRole,
+          user: newUser,
+          role: newRole,
+        }); // after save
 
       userRepo.findOne.mockResolvedValue(newUser);
       roleRepo.findOne.mockResolvedValue(newRole);
@@ -221,7 +236,10 @@ describe('UserRolesService', () => {
       roleRepo.findOne.mockResolvedValue(mockRoleEntity);
 
       await expect(
-        service.update('user-role-uuid', { userId: 'new-user-uuid', roleId: 'role-uuid' }),
+        service.update('user-role-uuid', {
+          userId: 'new-user-uuid',
+          roleId: 'role-uuid',
+        }),
       ).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
     });
   });

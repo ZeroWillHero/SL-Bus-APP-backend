@@ -14,6 +14,8 @@ import { UserRole } from '../user-roles/entities/user-role.entity';
 import { BusOwner } from '../bus-owner/entities/bus-owner.entity';
 import { SmsService } from '../sms/sms.service';
 import * as crypto from 'crypto';
+import { ConductorFilterDto } from './dto/conductor-filter.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
 
 @Injectable()
 export class ConductorService {
@@ -130,19 +132,62 @@ export class ConductorService {
     }
   }
 
-  async findAll(): Promise<ConductorDTO[]> {
-    const conductors = await this.conductorRepository.find({
-      relations: ['user', 'busOwner'],
-    });
-    return conductors.map((conductor) => this.convertToDTO(conductor));
+  async findAll(
+    filters: ConductorFilterDto = {},
+  ): Promise<{ items: ConductorDTO[]; total: number }> {
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+
+    const qb = this.conductorRepository
+      .createQueryBuilder('conductor')
+      .leftJoinAndSelect('conductor.user', 'user')
+      .leftJoinAndSelect('conductor.busOwner', 'busOwner');
+
+    if (filters.search) {
+      qb.andWhere(
+        '(conductor.firstName ILIKE :s OR conductor.lastName ILIKE :s OR conductor.licenseNumber ILIKE :s OR user.email ILIKE :s)',
+        { s: `%${filters.search}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const conductors = await qb
+      .orderBy('conductor.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return { items: conductors.map((c) => this.convertToDTO(c)), total };
   }
 
-  async findAllByOwner(busOwnerId: string): Promise<ConductorDTO[]> {
-    const conductors = await this.conductorRepository.find({
-      where: { busOwner: { id: busOwnerId } },
-      relations: ['user', 'busOwner'],
-    });
-    return conductors.map((conductor) => this.convertToDTO(conductor));
+  async findAllByOwner(
+    busOwnerId: string,
+    filters: ConductorFilterDto = {},
+  ): Promise<{ items: ConductorDTO[]; total: number }> {
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+
+    const qb = this.conductorRepository
+      .createQueryBuilder('conductor')
+      .leftJoinAndSelect('conductor.user', 'user')
+      .leftJoinAndSelect('conductor.busOwner', 'busOwner')
+      .where('busOwner.id = :busOwnerId', { busOwnerId });
+
+    if (filters.search) {
+      qb.andWhere(
+        '(conductor.firstName ILIKE :s OR conductor.lastName ILIKE :s OR conductor.licenseNumber ILIKE :s OR user.email ILIKE :s)',
+        { s: `%${filters.search}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const conductors = await qb
+      .orderBy('conductor.id', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return { items: conductors.map((c) => this.convertToDTO(c)), total };
   }
 
   async findOne(id: string): Promise<ConductorDTO> {

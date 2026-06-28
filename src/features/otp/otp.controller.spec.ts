@@ -11,7 +11,12 @@ describe('OtpController', () => {
       providers: [
         {
           provide: OtpService,
-          useValue: { send: jest.fn(), verify: jest.fn(), checkOtp: jest.fn(), consumeOtp: jest.fn() },
+          useValue: {
+            send: jest.fn(),
+            verify: jest.fn(),
+            checkOtp: jest.fn(),
+            consumeOtp: jest.fn(),
+          },
         },
       ],
     }).compile();

@@ -8,12 +8,14 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiExtraModels,
   ApiNoContentResponse,
   ApiOkResponse,
   ApiOperation,
@@ -24,15 +26,20 @@ import { BusOwnerService } from '../bus-owner/bus-owner.service';
 import { CreateRouteDto } from './dto/create-route.dto';
 import { UpdateRouteDto } from './dto/update-route.dto';
 import { RouteDto } from './dto/route.dto';
+import { RouteFilterDto } from './dto/route-filter.dto';
 import { RouteStopDto } from './dto/route-stop.dto';
 import { CreateRouteStopDto } from './dto/create-route-stop.dto';
 import { UpdateRouteStopDto } from './dto/update-route-stop.dto';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
+import { PageResponseDTO } from '../../utils/common/dto/pageResponse.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
+import { paginatedSchema } from '../../utils/common/swagger/paginated-schema';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 
 @ApiTags('Routes')
 @ApiBearerAuth()
+@ApiExtraModels(RouteDto)
 @Roles('BusOwner')
 @Controller('api/v1/routes')
 export class RouteController {
@@ -57,13 +64,27 @@ export class RouteController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List own routes (BusOwner)' })
-  @ApiOkResponse({ type: [RouteDto] })
-  async findAll(@Req() req: Request): Promise<ResponseDTO<RouteDto[]>> {
+  @ApiOperation({
+    summary: 'List own routes with optional filters and pagination (BusOwner)',
+  })
+  @ApiOkResponse({ schema: paginatedSchema(RouteDto) })
+  async findAll(
+    @Req() req: Request,
+    @Query() filters: RouteFilterDto,
+  ): Promise<ResponseDTO<PageResponseDTO<RouteDto>>> {
     const user = req.user as AuthenticatedUser;
     const owner = await this.busOwnerService.findByUserId(user.userId);
-    const result = await this.routeService.findAllByOwner(owner.id);
-    return new ResponseDTO(true, 'Routes fetched successfully', result);
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+    const { items, total } = await this.routeService.findAllByOwner(
+      owner.id,
+      filters,
+    );
+    return new ResponseDTO(
+      true,
+      'Routes fetched successfully',
+      new PageResponseDTO(items, total, page, limit),
+    );
   }
 
   @Get(':id')
@@ -146,7 +167,12 @@ export class RouteController {
   ): Promise<ResponseDTO<RouteStopDto>> {
     const user = req.user as AuthenticatedUser;
     const owner = await this.busOwnerService.findByUserId(user.userId);
-    const result = await this.routeService.updateStop(routeId, stopId, owner.id, dto);
+    const result = await this.routeService.updateStop(
+      routeId,
+      stopId,
+      owner.id,
+      dto,
+    );
     return new ResponseDTO(true, 'Stop updated successfully', result);
   }
 

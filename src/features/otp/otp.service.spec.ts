@@ -62,7 +62,9 @@ describe('OtpService', () => {
 
       expect(cacheManager.set).toHaveBeenCalledWith(
         'otp:+94771234567',
-        expect.stringMatching(/^\{"code":"\d{6}","attempts":0,"expiresAt":\d+\}$/),
+        expect.stringMatching(
+          /^\{"code":"\d{6}","attempts":0,"expiresAt":\d+\}$/,
+        ),
         300000,
       );
       expect(smsService.sendSMS).toHaveBeenCalledWith(

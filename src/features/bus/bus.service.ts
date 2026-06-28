@@ -14,6 +14,8 @@ import { BusDto } from './dto/bus.dto';
 import { UploadDocumentDto } from './dto/upload-document.dto';
 import { BusDocumentDto } from './dto/bus-document.dto';
 import { ApprovalStatus } from './enums/approval-status.enum';
+import { BusFilterDto } from './dto/bus-filter.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
 
 @Injectable()
 export class BusService {
@@ -65,18 +67,53 @@ export class BusService {
 
   async findAllByOwner(
     ownerId: string,
-    status?: ApprovalStatus,
-  ): Promise<BusDto[]> {
-    const where: Record<string, unknown> = { owner: { id: ownerId } };
-    if (status) where.approvalStatus = status;
-    const buses = await this.busRepo.find({ where, relations: ['owner', 'owner.user', 'routes', 'routes.bus', 'schedules', 'schedules.route'] });
-    return buses.map((b) => this.toDto(b));
+    filters: BusFilterDto = {},
+  ): Promise<{ items: BusDto[]; total: number }> {
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+    const sortOrder = filters.sortOrder ?? 'DESC';
+
+    const qb = this.busRepo
+      .createQueryBuilder('bus')
+      .leftJoinAndSelect('bus.owner', 'owner')
+      .leftJoinAndSelect('owner.user', 'ownerUser')
+      .leftJoinAndSelect('bus.routes', 'routes')
+      .leftJoinAndSelect('routes.bus', 'routeBus')
+      .leftJoinAndSelect('bus.schedules', 'schedules')
+      .leftJoinAndSelect('schedules.route', 'scheduleRoute')
+      .where('owner.id = :ownerId', { ownerId });
+
+    if (filters.status) {
+      qb.andWhere('bus.approvalStatus = :status', { status: filters.status });
+    }
+    if (filters.search) {
+      qb.andWhere(
+        '(bus.registrationNumber ILIKE :search OR bus.model ILIKE :search)',
+        { search: `%${filters.search}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const buses = await qb
+      .orderBy('bus.createdAt', sortOrder)
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return { items: buses.map((b) => this.toDto(b)), total };
   }
 
   async findOneByOwner(busId: string, ownerId: string): Promise<BusDto> {
     const bus = await this.busRepo.findOne({
       where: { id: busId, owner: { id: ownerId } },
-      relations: ['owner', 'owner.user', 'routes', 'routes.bus', 'schedules', 'schedules.route'],
+      relations: [
+        'owner',
+        'owner.user',
+        'routes',
+        'routes.bus',
+        'schedules',
+        'schedules.route',
+      ],
     });
     if (!bus) throw new AppError('Bus not found', HttpStatus.NOT_FOUND);
     return this.toDto(bus);
@@ -164,12 +201,42 @@ export class BusService {
     return this.toDocDto(doc, true);
   }
 
-  // ─── Admin operations ────────────────────────────────────────────────────────
+  // ─── Admin / Customer operations ─────────────────────────────────────────────
 
-  async findAll(status?: ApprovalStatus): Promise<BusDto[]> {
-    const where = status ? { approvalStatus: status } : {};
-    const buses = await this.busRepo.find({ where, relations: ['owner', 'owner.user', 'routes', 'routes.bus', 'schedules', 'schedules.route'] });
-    return buses.map((b) => this.toDto(b));
+  async findAll(
+    filters: BusFilterDto = {},
+  ): Promise<{ items: BusDto[]; total: number }> {
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+    const sortOrder = filters.sortOrder ?? 'DESC';
+
+    const qb = this.busRepo
+      .createQueryBuilder('bus')
+      .leftJoinAndSelect('bus.owner', 'owner')
+      .leftJoinAndSelect('owner.user', 'ownerUser')
+      .leftJoinAndSelect('bus.routes', 'routes')
+      .leftJoinAndSelect('routes.bus', 'routeBus')
+      .leftJoinAndSelect('bus.schedules', 'schedules')
+      .leftJoinAndSelect('schedules.route', 'scheduleRoute');
+
+    if (filters.status) {
+      qb.andWhere('bus.approvalStatus = :status', { status: filters.status });
+    }
+    if (filters.search) {
+      qb.andWhere(
+        '(bus.registrationNumber ILIKE :search OR bus.model ILIKE :search)',
+        { search: `%${filters.search}%` },
+      );
+    }
+
+    const total = await qb.getCount();
+    const buses = await qb
+      .orderBy('bus.createdAt', sortOrder)
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return { items: buses.map((b) => this.toDto(b)), total };
   }
 
   async findOneAdmin(busId: string): Promise<BusDto> {
@@ -220,7 +287,11 @@ export class BusService {
     return docs.map((d) => this.toDocDto(d, false));
   }
 
-  async verifyDocument(busId: string, docId: string, adminUserId: string): Promise<BusDocumentDto> {
+  async verifyDocument(
+    busId: string,
+    docId: string,
+    adminUserId: string,
+  ): Promise<BusDocumentDto> {
     const doc = await this.docRepo.findOne({
       where: { id: docId, bus: { id: busId } },
     });
@@ -250,9 +321,15 @@ export class BusService {
       seatLayoutJson: bus.seatLayoutJson,
       approvalStatus: bus.approvalStatus,
       rejectionReason: bus.rejectionReason,
-      owner: bus.owner ? this.busOwnerService.convertToDto(bus.owner) : undefined,
-      routes: bus.routes ? bus.routes.map((r) => this.routeService.toDto(r)) : undefined,
-      schedules: bus.schedules ? bus.schedules.map((s) => this.scheduleService.toDto(s)) : undefined,
+      owner: bus.owner
+        ? this.busOwnerService.convertToDto(bus.owner)
+        : undefined,
+      routes: bus.routes
+        ? bus.routes.map((r) => this.routeService.toDto(r))
+        : undefined,
+      schedules: bus.schedules
+        ? bus.schedules.map((s) => this.scheduleService.toDto(s))
+        : undefined,
       createdAt: bus.createdAt,
       updatedAt: bus.updatedAt,
     });

@@ -13,9 +13,9 @@ import type { Request } from 'express';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiExtraModels,
   ApiOkResponse,
   ApiOperation,
-  ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
 import { ScheduleService } from './schedule.service';
@@ -28,13 +28,18 @@ import { ConductorService } from '../conductor/conductor.service';
 import { CreateScheduleDto } from './dto/create-schedule.dto';
 import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { ScheduleDto } from './dto/schedule.dto';
+import { ScheduleFilterDto } from './dto/schedule-filter.dto';
 import { SetAvailabilityDto } from './dto/set-availability.dto';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
+import { PageResponseDTO } from '../../utils/common/dto/pageResponse.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
+import { paginatedSchema } from '../../utils/common/swagger/paginated-schema';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 
 @ApiTags('Schedules')
 @ApiBearerAuth()
+@ApiExtraModels(ScheduleDto)
 @Controller('api/v1/schedules')
 export class ScheduleController {
   constructor(
@@ -42,7 +47,7 @@ export class ScheduleController {
     private readonly busOwnerService: BusOwnerService,
     private readonly tripAvailabilityService: TripAvailabilityService,
     private readonly conductorService: ConductorService,
-  ) { }
+  ) {}
 
   // ─── BusOwner endpoints ──────────────────────────────────────────────────────
 
@@ -63,28 +68,27 @@ export class ScheduleController {
   @Get()
   @Roles('BusOwner')
   @ApiOperation({
-    summary: 'List own schedules with optional filters (BusOwner)',
+    summary:
+      'List own schedules with optional filters and pagination (BusOwner)',
   })
-  @ApiQuery({ name: 'busId', required: false })
-  @ApiQuery({ name: 'routeId', required: false })
-  @ApiQuery({ name: 'isActive', required: false, type: Boolean })
-  @ApiOkResponse({ type: [ScheduleDto] })
+  @ApiOkResponse({ schema: paginatedSchema(ScheduleDto) })
   async findAll(
     @Req() req: Request,
-    @Query('busId') busId?: string,
-    @Query('routeId') routeId?: string,
-    @Query('isActive') isActive?: string,
-  ): Promise<ResponseDTO<ScheduleDto[]>> {
+    @Query() filters: ScheduleFilterDto,
+  ): Promise<ResponseDTO<PageResponseDTO<ScheduleDto>>> {
     const user = req.user as AuthenticatedUser;
     const owner = await this.busOwnerService.findByUserId(user.userId);
-    const activeFilter =
-      isActive === 'true' ? true : isActive === 'false' ? false : undefined;
-    const result = await this.scheduleService.findAll(owner.id, {
-      busId,
-      routeId,
-      isActive: activeFilter,
-    });
-    return new ResponseDTO(true, 'Schedules fetched successfully', result);
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+    const { items, total } = await this.scheduleService.findAll(
+      owner.id,
+      filters,
+    );
+    return new ResponseDTO(
+      true,
+      'Schedules fetched successfully',
+      new PageResponseDTO(items, total, page, limit),
+    );
   }
 
   @Get(':id')

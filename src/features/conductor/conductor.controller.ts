@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   Req,
 } from '@nestjs/common';
 import type { Request } from 'express';
@@ -17,12 +18,17 @@ import { UpdateConductorDto } from './dto/update-conductor.dto';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiExtraModels,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
 } from '@nestjs/swagger';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
+import { PageResponseDTO } from '../../utils/common/dto/pageResponse.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
+import { paginatedSchema } from '../../utils/common/swagger/paginated-schema';
 import { ConductorDTO } from './dto/conductor.dto';
+import { ConductorFilterDto } from './dto/conductor-filter.dto';
 import { BusDto } from '../bus/dto/bus.dto';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
@@ -30,6 +36,7 @@ import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 @Controller(['api/v1/conductor', 'api/v1/conductors'])
 @ApiTags('Conductor')
 @ApiBearerAuth()
+@ApiExtraModels(ConductorDTO)
 export class ConductorController {
   constructor(
     private readonly conductorService: ConductorService,
@@ -39,7 +46,9 @@ export class ConductorController {
 
   @Post()
   @Roles('BusOwner')
-  @ApiOperation({ summary: 'Register a conductor under the authenticated bus owner' })
+  @ApiOperation({
+    summary: 'Register a conductor under the authenticated bus owner',
+  })
   @ApiCreatedResponse({ type: ConductorDTO })
   async create(
     @Req() req: Request,
@@ -47,23 +56,50 @@ export class ConductorController {
   ): Promise<ResponseDTO<ConductorDTO>> {
     const user = req.user as AuthenticatedUser;
     const owner = await this.busOwnerService.findByUserId(user.userId);
-    const result = await this.conductorService.create(createConductorDto, owner.id);
-    return new ResponseDTO<ConductorDTO>(true, 'Conductor created successfully', result);
+    const result = await this.conductorService.create(
+      createConductorDto,
+      owner.id,
+    );
+    return new ResponseDTO<ConductorDTO>(
+      true,
+      'Conductor created successfully',
+      result,
+    );
   }
 
   @Get()
   @Roles('Admin', 'BusOwner')
-  @ApiOperation({ summary: 'List conductors — Admin sees all, BusOwner sees own' })
-  @ApiOkResponse({ type: [ConductorDTO] })
-  async findAll(@Req() req: Request): Promise<ResponseDTO<ConductorDTO[]>> {
+  @ApiOperation({
+    summary: 'List conductors (paginated) — Admin sees all, BusOwner sees own',
+  })
+  @ApiOkResponse({ schema: paginatedSchema(ConductorDTO) })
+  async findAll(
+    @Req() req: Request,
+    @Query() filters: ConductorFilterDto,
+  ): Promise<ResponseDTO<PageResponseDTO<ConductorDTO>>> {
     const user = req.user as AuthenticatedUser;
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+
     if (user.roles.includes('Admin')) {
-      const result = await this.conductorService.findAll();
-      return new ResponseDTO<ConductorDTO[]>(true, 'Conductors fetched successfully', result);
+      const { items, total } = await this.conductorService.findAll(filters);
+      return new ResponseDTO(
+        true,
+        'Conductors fetched successfully',
+        new PageResponseDTO(items, total, page, limit),
+      );
     }
+
     const owner = await this.busOwnerService.findByUserId(user.userId);
-    const result = await this.conductorService.findAllByOwner(owner.id);
-    return new ResponseDTO<ConductorDTO[]>(true, 'Conductors fetched successfully', result);
+    const { items, total } = await this.conductorService.findAllByOwner(
+      owner.id,
+      filters,
+    );
+    return new ResponseDTO(
+      true,
+      'Conductors fetched successfully',
+      new PageResponseDTO(items, total, page, limit),
+    );
   }
 
   @Get(':id')
@@ -72,7 +108,11 @@ export class ConductorController {
   @ApiOkResponse({ type: ConductorDTO })
   async findOne(@Param('id') id: string): Promise<ResponseDTO<ConductorDTO>> {
     const result = await this.conductorService.findOne(id);
-    return new ResponseDTO<ConductorDTO>(true, 'Conductor fetched successfully', result);
+    return new ResponseDTO<ConductorDTO>(
+      true,
+      'Conductor fetched successfully',
+      result,
+    );
   }
 
   @Patch(':id')
@@ -84,7 +124,11 @@ export class ConductorController {
     @Body() updateConductorDto: UpdateConductorDto,
   ): Promise<ResponseDTO<ConductorDTO>> {
     const result = await this.conductorService.update(id, updateConductorDto);
-    return new ResponseDTO<ConductorDTO>(true, 'Conductor updated successfully', result);
+    return new ResponseDTO<ConductorDTO>(
+      true,
+      'Conductor updated successfully',
+      result,
+    );
   }
 
   @Delete(':id')
@@ -99,12 +143,16 @@ export class ConductorController {
 
   @Get('me/buses')
   @Roles('Conductor')
-  @ApiOperation({ summary: 'List buses assigned to the authenticated conductor' })
+  @ApiOperation({
+    summary: 'List buses assigned to the authenticated conductor',
+  })
   @ApiOkResponse({ type: [BusDto] })
   async myBuses(@Req() req: Request): Promise<ResponseDTO<BusDto[]>> {
     const user = req.user as AuthenticatedUser;
     const conductor = await this.conductorService.findByUserId(user.userId);
-    const result = await this.assignmentService.listBusesByConductor(conductor.id!);
+    const result = await this.assignmentService.listBusesByConductor(
+      conductor.id!,
+    );
     return new ResponseDTO(true, 'Assigned buses fetched successfully', result);
   }
 }

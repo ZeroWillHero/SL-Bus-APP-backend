@@ -11,6 +11,8 @@ import { UpdateScheduleDto } from './dto/update-schedule.dto';
 import { ScheduleDto } from './dto/schedule.dto';
 import { RouteDto } from '../route/dto/route.dto';
 import { RouteService } from '../route/route.service';
+import { ScheduleFilterDto } from './dto/schedule-filter.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
 
 @Injectable()
 export class ScheduleService {
@@ -56,8 +58,18 @@ export class ScheduleService {
 
   async findAll(
     ownerId: string,
-    filters: { busId?: string; routeId?: string; isActive?: boolean },
-  ): Promise<ScheduleDto[]> {
+    filters: ScheduleFilterDto = {},
+  ): Promise<{ items: ScheduleDto[]; total: number }> {
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+    const sortOrder = filters.sortOrder ?? 'DESC';
+    const activeFilter =
+      filters.isActive === 'true'
+        ? true
+        : filters.isActive === 'false'
+          ? false
+          : undefined;
+
     const qb = this.scheduleRepo
       .createQueryBuilder('s')
       .innerJoinAndSelect('s.bus', 'bus')
@@ -68,11 +80,17 @@ export class ScheduleService {
     if (filters.busId) qb.andWhere('bus.id = :busId', { busId: filters.busId });
     if (filters.routeId)
       qb.andWhere('route.id = :routeId', { routeId: filters.routeId });
-    if (filters.isActive !== undefined)
-      qb.andWhere('s.isActive = :isActive', { isActive: filters.isActive });
+    if (activeFilter !== undefined)
+      qb.andWhere('s.isActive = :isActive', { isActive: activeFilter });
 
-    const schedules = await qb.getMany();
-    return schedules.map((s) => this.toDto(s));
+    const total = await qb.getCount();
+    const schedules = await qb
+      .orderBy('s.createdAt', sortOrder)
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return { items: schedules.map((s) => this.toDto(s)), total };
   }
 
   async findOne(scheduleId: string, ownerId: string): Promise<ScheduleDto> {

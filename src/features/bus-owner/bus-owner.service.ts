@@ -145,7 +145,9 @@ export class BusOwnerService {
     }
 
     if (typeof filters.isActive === 'boolean') {
-      qb.andWhere('user.isVerified = :isActive', { isActive: filters.isActive });
+      qb.andWhere('user.isVerified = :isActive', {
+        isActive: filters.isActive,
+      });
     }
 
     qb.orderBy('user.createdAt', sortOrder);
@@ -204,7 +206,10 @@ export class BusOwnerService {
 
   async reject(busOwnerId: string, reason: string): Promise<BusOwnerDto> {
     if (!reason?.trim()) {
-      throw new AppError('Rejection reason is required', HttpStatus.BAD_REQUEST);
+      throw new AppError(
+        'Rejection reason is required',
+        HttpStatus.BAD_REQUEST,
+      );
     }
     const owner = await this.busOwnerRepo.findOne({
       where: { id: busOwnerId },
@@ -250,7 +255,9 @@ export class BusOwnerService {
       approvalStatus: owner.approvalStatus ?? ApprovalStatus.PENDING,
       rejectionReason: owner.rejectionReason ?? null,
       user: owner.user ? this.convertUserToDto(owner.user) : undefined,
-      buses: owner.buses ? owner.buses.map((b) => this.convertBusToDto(b)) : undefined,
+      buses: owner.buses
+        ? owner.buses.map((b) => this.convertBusToDto(b))
+        : undefined,
     };
   }
 
@@ -261,7 +268,10 @@ export class BusOwnerService {
       phone: user.phone,
       isVerified: user.isVerified,
       isBanned: user.isBanned ?? false,
-      roles: user.userRoles?.map((ur) => ur.role.name).filter((n): n is string => !!n) ?? [],
+      roles:
+        user.userRoles
+          ?.map((ur) => ur.role.name)
+          .filter((n): n is string => !!n) ?? [],
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };

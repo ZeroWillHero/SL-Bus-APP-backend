@@ -10,7 +10,10 @@ export class RouteStopDto {
   @ApiProperty({ example: 0, description: 'Zero-based order from origin' })
   stopOrder!: number;
 
-  @ApiProperty({ example: 50.0, description: 'Fare in LKR from route origin to this stop' })
+  @ApiProperty({
+    example: 50.0,
+    description: 'Fare in LKR from route origin to this stop',
+  })
   priceFromOrigin!: number;
 
   @ApiProperty()

@@ -20,7 +20,11 @@ describe('AuthController', () => {
         },
         {
           provide: OtpService,
-          useValue: { checkOtp: jest.fn(), consumeOtp: jest.fn(), verify: jest.fn() },
+          useValue: {
+            checkOtp: jest.fn(),
+            consumeOtp: jest.fn(),
+            verify: jest.fn(),
+          },
         },
         {
           provide: getRepositoryToken(User),

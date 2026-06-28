@@ -3,6 +3,7 @@ import type { Request } from 'express';
 import {
   ApiBearerAuth,
   ApiCreatedResponse,
+  ApiExtraModels,
   ApiOkResponse,
   ApiOperation,
   ApiQuery,
@@ -14,16 +15,20 @@ import { CouponService } from '../coupon/coupon.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { CreateCashBookingDto } from './dto/create-cash-booking.dto';
 import { BookingDto, SeatMapDto } from './dto/booking.dto';
+import { BookingFilterDto } from './dto/booking-filter.dto';
 import { TicketDto } from './dto/ticket.dto';
 import { VerifyTicketDto } from './dto/verify-ticket.dto';
 import { CouponValidationDto } from '../coupon/dto/coupon.dto';
-import { BookingStatus } from './enums/booking-status.enum';
 import { ResponseDTO } from '../../utils/common/dto/response.dto';
+import { PageResponseDTO } from '../../utils/common/dto/pageResponse.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
+import { paginatedSchema } from '../../utils/common/swagger/paginated-schema';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 
 @ApiTags('Bookings')
 @ApiBearerAuth()
+@ApiExtraModels(BookingDto)
 @Controller('api/v1')
 export class BookingController {
   constructor(
@@ -55,7 +60,10 @@ export class BookingController {
 
   @Post('bookings')
   @Roles('Customer')
-  @ApiOperation({ summary: 'Create a new booking (Customer) — status starts as PENDING_PAYMENT' })
+  @ApiOperation({
+    summary:
+      'Create a new booking (Customer) — status starts as PENDING_PAYMENT',
+  })
   @ApiCreatedResponse({ type: BookingDto })
   async create(
     @Req() req: Request,
@@ -69,27 +77,34 @@ export class BookingController {
 
   @Get('bookings')
   @Roles('Customer')
-  @ApiOperation({ summary: 'List own bookings (Customer)' })
-  @ApiQuery({ name: 'status', required: false, enum: BookingStatus })
-  @ApiQuery({ name: 'upcoming', required: false, type: Boolean })
-  @ApiOkResponse({ type: [BookingDto] })
+  @ApiOperation({
+    summary: 'List own bookings with pagination and filters (Customer)',
+  })
+  @ApiOkResponse({ schema: paginatedSchema(BookingDto) })
   async list(
     @Req() req: Request,
-    @Query('status') status?: BookingStatus,
-    @Query('upcoming') upcoming?: string,
-  ): Promise<ResponseDTO<BookingDto[]>> {
+    @Query() filters: BookingFilterDto,
+  ): Promise<ResponseDTO<PageResponseDTO<BookingDto>>> {
     const user = req.user as AuthenticatedUser;
     const customer = await this.customerService.findByUserId(user.userId);
-    const result = await this.bookingService.list(customer.id, {
-      status,
-      upcoming: upcoming === 'true',
-    });
-    return new ResponseDTO(true, 'Bookings fetched successfully', result);
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+    const { items, total } = await this.bookingService.list(
+      customer.id,
+      filters,
+    );
+    return new ResponseDTO(
+      true,
+      'Bookings fetched successfully',
+      new PageResponseDTO(items, total, page, limit),
+    );
   }
 
   @Post('bookings/:id/cancel')
   @Roles('Customer')
-  @ApiOperation({ summary: 'Cancel a booking (Customer) — refunds payment if paid' })
+  @ApiOperation({
+    summary: 'Cancel a booking (Customer) — refunds payment if paid',
+  })
   @ApiOkResponse({ type: BookingDto })
   async cancel(
     @Req() req: Request,
@@ -119,8 +134,15 @@ export class BookingController {
 
   @Get('coupons/:code/validate')
   @Roles('Customer')
-  @ApiOperation({ summary: 'Validate a coupon code and preview discount (Customer)' })
-  @ApiQuery({ name: 'fare', required: true, type: Number, description: 'Total fare before discount' })
+  @ApiOperation({
+    summary: 'Validate a coupon code and preview discount (Customer)',
+  })
+  @ApiQuery({
+    name: 'fare',
+    required: true,
+    type: Number,
+    description: 'Total fare before discount',
+  })
   @ApiOkResponse({ type: CouponValidationDto })
   async validateCoupon(
     @Req() req: Request,
@@ -141,20 +163,28 @@ export class BookingController {
 
   @Post('bookings/cash')
   @Roles('Conductor')
-  @ApiOperation({ summary: 'Create a cash/walk-in booking and mark immediately as CONFIRMED (Conductor)' })
+  @ApiOperation({
+    summary:
+      'Create a cash/walk-in booking and mark immediately as CONFIRMED (Conductor)',
+  })
   @ApiCreatedResponse({ type: BookingDto })
   async createCashBooking(
     @Req() req: Request,
     @Body() dto: CreateCashBookingDto,
   ): Promise<ResponseDTO<BookingDto>> {
     const user = req.user as AuthenticatedUser;
-    const result = await this.bookingService.createCashBooking(user.userId, dto);
+    const result = await this.bookingService.createCashBooking(
+      user.userId,
+      dto,
+    );
     return new ResponseDTO(true, 'Cash booking created successfully', result);
   }
 
   @Post('bookings/:id/board')
   @Roles('Conductor')
-  @ApiOperation({ summary: 'Mark a passenger as boarded by booking ID (Conductor)' })
+  @ApiOperation({
+    summary: 'Mark a passenger as boarded by booking ID (Conductor)',
+  })
   @ApiOkResponse({ type: BookingDto })
   async board(
     @Req() req: Request,
@@ -167,14 +197,23 @@ export class BookingController {
 
   @Post('bookings/scan')
   @Roles('Conductor')
-  @ApiOperation({ summary: 'Scan a QR ticket token and mark passenger as boarded (Conductor)' })
+  @ApiOperation({
+    summary: 'Scan a QR ticket token and mark passenger as boarded (Conductor)',
+  })
   @ApiOkResponse({ type: BookingDto })
   async scanTicket(
     @Req() req: Request,
     @Body() dto: VerifyTicketDto,
   ): Promise<ResponseDTO<BookingDto>> {
     const user = req.user as AuthenticatedUser;
-    const result = await this.bookingService.verifyTicket(dto.token, user.userId);
-    return new ResponseDTO(true, 'Ticket verified and passenger boarded successfully', result);
+    const result = await this.bookingService.verifyTicket(
+      dto.token,
+      user.userId,
+    );
+    return new ResponseDTO(
+      true,
+      'Ticket verified and passenger boarded successfully',
+      result,
+    );
   }
 }

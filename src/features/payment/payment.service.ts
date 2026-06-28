@@ -7,7 +7,11 @@ import { Customer } from '../customer/entities/customer.entity';
 import { AppError } from '../../common/exceptions/app.exception';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { PaymentDto } from './dto/payment.dto';
-import { AdminPaymentDto, AdminPaymentPageDto, PaymentStatsDto } from './dto/admin-payment.dto';
+import {
+  AdminPaymentDto,
+  AdminPaymentPageDto,
+  PaymentStatsDto,
+} from './dto/admin-payment.dto';
 import { PaymentStatus } from './enums/payment-status.enum';
 import { PaymentMethod } from './enums/payment-method.enum';
 import { BookingStatus } from '../booking/enums/booking-status.enum';
@@ -119,13 +123,17 @@ export class PaymentService {
       qb.andWhere('p.status = :status', { status: filters.status });
     }
     if (filters.paymentMethod) {
-      qb.andWhere('p.paymentMethod = :method', { method: filters.paymentMethod });
+      qb.andWhere('p.paymentMethod = :method', {
+        method: filters.paymentMethod,
+      });
     }
     if (filters.fromDate) {
       qb.andWhere('p.createdAt >= :fromDate', { fromDate: filters.fromDate });
     }
     if (filters.toDate) {
-      qb.andWhere('p.createdAt <= :toDate', { toDate: `${filters.toDate} 23:59:59` });
+      qb.andWhere('p.createdAt <= :toDate', {
+        toDate: `${filters.toDate} 23:59:59`,
+      });
     }
 
     const total = await qb.getCount();
@@ -161,7 +169,12 @@ export class PaymentService {
       .addSelect('COUNT(*)', 'count')
       .groupBy('p.status')
       .addGroupBy('p.paymentMethod')
-      .getRawMany<{ status: PaymentStatus; method: PaymentMethod; total: string; count: string }>();
+      .getRawMany<{
+        status: PaymentStatus;
+        method: PaymentMethod;
+        total: string;
+        count: string;
+      }>();
 
     let totalRevenue = 0;
     let totalRefunded = 0;
