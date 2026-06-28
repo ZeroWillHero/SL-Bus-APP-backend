@@ -60,9 +60,11 @@ describe('RolesService', () => {
     it('throws 409 when role name already exists', async () => {
       roleRepo.findOne.mockResolvedValue(mockRole);
 
-      await expect(service.create({ name: 'Conductor' })).rejects.toMatchObject({
-        status: HttpStatus.CONFLICT,
-      });
+      await expect(service.create({ name: 'Conductor' })).rejects.toMatchObject(
+        {
+          status: HttpStatus.CONFLICT,
+        },
+      );
       expect(roleRepo.save).not.toHaveBeenCalled();
     });
   });
@@ -71,7 +73,10 @@ describe('RolesService', () => {
 
   describe('findAll', () => {
     it('returns all roles as DTOs', async () => {
-      roleRepo.find.mockResolvedValue([mockRole, { id: 'role-2', name: 'Customer', userRoles: [] }]);
+      roleRepo.find.mockResolvedValue([
+        mockRole,
+        { id: 'role-2', name: 'Customer', userRoles: [] },
+      ]);
 
       const result = await service.findAll();
 
@@ -115,14 +120,18 @@ describe('RolesService', () => {
 
       const result = await service.update('role-uuid', { name: 'Driver' });
 
-      expect(roleRepo.save).toHaveBeenCalledWith(expect.objectContaining({ name: 'Driver' }));
+      expect(roleRepo.save).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Driver' }),
+      );
       expect(result.name).toBe('Driver');
     });
 
     it('throws 404 when role not found', async () => {
       roleRepo.findOneBy.mockResolvedValue(null);
 
-      await expect(service.update('missing', { name: 'X' })).rejects.toMatchObject({
+      await expect(
+        service.update('missing', { name: 'X' }),
+      ).rejects.toMatchObject({
         status: HttpStatus.NOT_FOUND,
       });
     });
@@ -162,13 +171,19 @@ describe('RolesService', () => {
 
   describe('convertToEntity', () => {
     it('maps id and name, defaulting name to empty string when missing', () => {
-      const entity = service.convertToEntity({ id: 'role-uuid', name: 'Conductor' });
+      const entity = service.convertToEntity({
+        id: 'role-uuid',
+        name: 'Conductor',
+      });
       expect(entity.id).toBe('role-uuid');
       expect(entity.name).toBe('Conductor');
     });
 
     it('defaults name to empty string when not provided', () => {
-      const entity = service.convertToEntity({ id: 'role-uuid', name: undefined as any });
+      const entity = service.convertToEntity({
+        id: 'role-uuid',
+        name: undefined as any,
+      });
       expect(entity.name).toBe('');
     });
   });

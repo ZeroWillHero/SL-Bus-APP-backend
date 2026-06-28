@@ -26,7 +26,10 @@ export class SearchResultDto {
   @ApiProperty({ type: [String], description: 'Stop names in order' })
   viaStops!: string[];
 
-  @ApiProperty({ type: [RouteStopDto], description: 'Stops with per-stop pricing' })
+  @ApiProperty({
+    type: [RouteStopDto],
+    description: 'Stops with per-stop pricing',
+  })
   stops!: RouteStopDto[];
 
   @ApiProperty()

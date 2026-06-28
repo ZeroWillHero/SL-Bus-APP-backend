@@ -90,7 +90,9 @@ describe('AuthService', () => {
         password: hashed,
       });
       otpService.checkOtp.mockRejectedValue(
-        Object.assign(new Error('Invalid OTP'), { status: HttpStatus.BAD_REQUEST }),
+        Object.assign(new Error('Invalid OTP'), {
+          status: HttpStatus.BAD_REQUEST,
+        }),
       );
 
       await expect(

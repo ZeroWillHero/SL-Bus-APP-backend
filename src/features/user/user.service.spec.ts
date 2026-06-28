@@ -77,7 +77,10 @@ describe('UserService', () => {
       userRepository.create.mockReturnValue(saved);
       userRepository.save.mockResolvedValue(saved);
 
-      await service.create({ email: 'alice@example.com', password: 'plain-secret' });
+      await service.create({
+        email: 'alice@example.com',
+        password: 'plain-secret',
+      });
 
       expect(userRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -92,7 +95,10 @@ describe('UserService', () => {
       userRepository.create.mockReturnValue(saved);
       userRepository.save.mockResolvedValue(saved);
 
-      const result = await service.create({ email: 'alice@example.com', password: 'pw' });
+      const result = await service.create({
+        email: 'alice@example.com',
+        password: 'pw',
+      });
 
       expect(result.email).toBe('alice@example.com');
       expect(result.isVerified).toBe(false);
@@ -104,9 +110,14 @@ describe('UserService', () => {
         create: jest.fn().mockReturnValue(saved),
         save: jest.fn().mockResolvedValue(saved),
       };
-      const mockManager = { getRepository: jest.fn().mockReturnValue(mockRepo) };
+      const mockManager = {
+        getRepository: jest.fn().mockReturnValue(mockRepo),
+      };
 
-      await service.create({ email: 'test@test.com', password: 'pw' }, mockManager as any);
+      await service.create(
+        { email: 'test@test.com', password: 'pw' },
+        mockManager as any,
+      );
 
       expect(mockManager.getRepository).toHaveBeenCalledWith(User);
       expect(mockRepo.save).toHaveBeenCalled();
@@ -161,9 +172,12 @@ describe('UserService', () => {
 
       await service.getAll({ email: 'john@example.com' } as UserFiltersDTO);
 
-      expect(queryBuilder.andWhere).toHaveBeenCalledWith('user.email = :email', {
-        email: 'john@example.com',
-      });
+      expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+        'user.email = :email',
+        {
+          email: 'john@example.com',
+        },
+      );
     });
 
     it('applies exact phone filter', async () => {
@@ -171,9 +185,12 @@ describe('UserService', () => {
 
       await service.getAll({ phone: '+94771234567' } as UserFiltersDTO);
 
-      expect(queryBuilder.andWhere).toHaveBeenCalledWith('user.phone = :phone', {
-        phone: '+94771234567',
-      });
+      expect(queryBuilder.andWhere).toHaveBeenCalledWith(
+        'user.phone = :phone',
+        {
+          phone: '+94771234567',
+        },
+      );
     });
 
     it('applies orderBy with default ASC', async () => {
@@ -187,9 +204,15 @@ describe('UserService', () => {
     it('applies orderBy with explicit DESC', async () => {
       queryBuilder.getMany.mockResolvedValue([]);
 
-      await service.getAll({ sortBy: 'createdAt', sortOrder: 'DESC' } as UserFiltersDTO);
+      await service.getAll({
+        sortBy: 'createdAt',
+        sortOrder: 'DESC',
+      } as UserFiltersDTO);
 
-      expect(queryBuilder.orderBy).toHaveBeenCalledWith('user.createdAt', 'DESC');
+      expect(queryBuilder.orderBy).toHaveBeenCalledWith(
+        'user.createdAt',
+        'DESC',
+      );
     });
 
     it('applies pagination skip/take', async () => {
@@ -291,7 +314,9 @@ describe('UserService', () => {
       userRepository.findOne.mockResolvedValue(existing);
       userRepository.save.mockResolvedValue(updated);
 
-      const result = await service.update('user-uuid', { phone: '+94779999999' });
+      const result = await service.update('user-uuid', {
+        phone: '+94779999999',
+      });
 
       expect(result.phone).toBe('+94779999999');
     });
@@ -299,7 +324,9 @@ describe('UserService', () => {
     it('throws 404 when user not found', async () => {
       userRepository.findOne.mockResolvedValue(null);
 
-      await expect(service.update('missing', { phone: '+1' })).rejects.toMatchObject({
+      await expect(
+        service.update('missing', { phone: '+1' }),
+      ).rejects.toMatchObject({
         status: HttpStatus.NOT_FOUND,
       });
       expect(userRepository.save).not.toHaveBeenCalled();
@@ -395,9 +422,13 @@ describe('UserService', () => {
     });
 
     it('throws 400 when user is already verified', async () => {
-      userRepository.findOneBy.mockResolvedValue(makeUser({ isVerified: true }));
+      userRepository.findOneBy.mockResolvedValue(
+        makeUser({ isVerified: true }),
+      );
 
-      await expect(service.verifyUser('+94771234567', '123456')).rejects.toMatchObject({
+      await expect(
+        service.verifyUser('+94771234567', '123456'),
+      ).rejects.toMatchObject({
         status: HttpStatus.BAD_REQUEST,
       });
     });
@@ -405,7 +436,9 @@ describe('UserService', () => {
     it('throws 404 when no user with that phone', async () => {
       userRepository.findOneBy.mockResolvedValue(null);
 
-      await expect(service.verifyUser('+94779999999', '123456')).rejects.toMatchObject({
+      await expect(
+        service.verifyUser('+94779999999', '123456'),
+      ).rejects.toMatchObject({
         status: HttpStatus.NOT_FOUND,
       });
     });
@@ -458,7 +491,9 @@ describe('UserService', () => {
     });
 
     it('defaults isBanned to false when undefined', () => {
-      const dto = service.convertToDTO(makeUser({ isBanned: undefined as any }));
+      const dto = service.convertToDTO(
+        makeUser({ isBanned: undefined as any }),
+      );
       expect(dto.isBanned).toBe(false);
     });
   });

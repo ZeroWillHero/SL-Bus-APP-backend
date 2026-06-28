@@ -13,15 +13,17 @@ describe('SmsService', () => {
   beforeEach(async () => {
     httpService = { get: jest.fn() };
     configService = {
-      get: jest.fn().mockImplementation((key: string, defaultValue?: string) => {
-        const config: Record<string, string> = {
-          SMS_API_URL: 'https://api.smslenz.com/v1/sms/send',
-          SMS_API_KEY: 'test-api-key',
-          SMS_USER_ID: 'test-user-id',
-          SMS_SENDER_ID: 'SLBUS',
-        };
-        return config[key] ?? defaultValue;
-      }),
+      get: jest
+        .fn()
+        .mockImplementation((key: string, defaultValue?: string) => {
+          const config: Record<string, string> = {
+            SMS_API_URL: 'https://api.smslenz.com/v1/sms/send',
+            SMS_API_KEY: 'test-api-key',
+            SMS_USER_ID: 'test-user-id',
+            SMS_SENDER_ID: 'SLBUS',
+          };
+          return config[key] ?? defaultValue;
+        }),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -71,19 +73,27 @@ describe('SmsService', () => {
     });
 
     it('throws AppError 500 when HTTP request fails', async () => {
-      httpService.get.mockReturnValue(throwError(() => new Error('Network error')));
+      httpService.get.mockReturnValue(
+        throwError(() => new Error('Network error')),
+      );
 
-      await expect(service.sendSMS('+94771234567', 'Test')).rejects.toMatchObject({
+      await expect(
+        service.sendSMS('+94771234567', 'Test'),
+      ).rejects.toMatchObject({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
       });
     });
 
     it('throws AppError 500 on connection timeout', async () => {
       httpService.get.mockReturnValue(
-        throwError(() => Object.assign(new Error('ECONNREFUSED'), { code: 'ECONNREFUSED' })),
+        throwError(() =>
+          Object.assign(new Error('ECONNREFUSED'), { code: 'ECONNREFUSED' }),
+        ),
       );
 
-      await expect(service.sendSMS('+94771234567', 'Test')).rejects.toMatchObject({
+      await expect(
+        service.sendSMS('+94771234567', 'Test'),
+      ).rejects.toMatchObject({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
       });
     });

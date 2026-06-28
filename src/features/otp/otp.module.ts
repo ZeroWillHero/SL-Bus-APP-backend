@@ -11,4 +11,4 @@ import { CacheModule } from '@nestjs/cache-manager';
   providers: [OtpService],
   exports: [OtpService],
 })
-export class OtpModule { }
+export class OtpModule {}

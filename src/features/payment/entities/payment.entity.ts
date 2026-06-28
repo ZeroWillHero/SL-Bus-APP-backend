@@ -26,7 +26,11 @@ export class Payment {
   @Column({ type: 'enum', enum: PaymentMethod })
   paymentMethod!: PaymentMethod;
 
-  @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.COMPLETED })
+  @Column({
+    type: 'enum',
+    enum: PaymentStatus,
+    default: PaymentStatus.COMPLETED,
+  })
   status!: PaymentStatus;
 
   @Column({ type: 'varchar', nullable: true })

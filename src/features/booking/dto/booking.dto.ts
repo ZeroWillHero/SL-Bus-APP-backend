@@ -29,7 +29,9 @@ export class BookingDto {
   @ApiProperty({ description: 'Discount applied by coupon' })
   discountAmount!: number;
 
-  @ApiProperty({ description: 'Amount customer actually pays (totalFare - discountAmount)' })
+  @ApiProperty({
+    description: 'Amount customer actually pays (totalFare - discountAmount)',
+  })
   payableAmount!: number;
 
   @ApiProperty({ nullable: true })

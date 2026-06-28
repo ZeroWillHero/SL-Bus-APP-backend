@@ -11,7 +11,10 @@ export class RouteDto {
   @ApiProperty()
   destination!: string;
 
-  @ApiProperty({ type: [String], description: 'Derived from stops ordered by stopOrder' })
+  @ApiProperty({
+    type: [String],
+    description: 'Derived from stops ordered by stopOrder',
+  })
   viaStops!: string[];
 
   @ApiProperty({ type: [RouteStopDto] })

@@ -17,7 +17,7 @@ import { Public } from '../../common/decorators/public.decorator';
 // @ApiBearerAuth()
 @Controller('user')
 export class UserController {
-  constructor(private readonly userService: UserService) { }
+  constructor(private readonly userService: UserService) {}
 
   @Get('me')
   @ApiOperation({ summary: 'Get own user profile' })

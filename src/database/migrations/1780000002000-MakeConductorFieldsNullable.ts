@@ -1,8 +1,6 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class MakeConductorFieldsNullable1780000002000
-  implements MigrationInterface
-{
+export class MakeConductorFieldsNullable1780000002000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(
       `ALTER TABLE "conductor" ALTER COLUMN "licenseNumber" DROP NOT NULL`,

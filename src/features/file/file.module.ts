@@ -9,7 +9,9 @@ import { BusOwner } from '../bus-owner/entities/bus-owner.entity';
 import { Bus } from '../bus/entities/bus.entity';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([FileUpload, User, Conductor, BusOwner, Bus])],
+  imports: [
+    TypeOrmModule.forFeature([FileUpload, User, Conductor, BusOwner, Bus]),
+  ],
   controllers: [FileController],
   providers: [FileService],
   exports: [FileService],

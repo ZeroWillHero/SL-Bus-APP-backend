@@ -17,6 +17,8 @@ export class AddCashBookingFields1779903000000 implements MigrationInterface {
         DROP COLUMN "passengerPhone"
     `);
     // NOTE: re-adding NOT NULL will fail if cash bookings exist
-    await queryRunner.query(`ALTER TABLE booking ALTER COLUMN "customerId" SET NOT NULL`);
+    await queryRunner.query(
+      `ALTER TABLE booking ALTER COLUMN "customerId" SET NOT NULL`,
+    );
   }
 }

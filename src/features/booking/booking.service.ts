@@ -21,6 +21,8 @@ import { TicketDto } from './dto/ticket.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { CreateCashBookingDto } from './dto/create-cash-booking.dto';
 import { PaymentMethod } from '../payment/enums/payment-method.enum';
+import { BookingFilterDto } from './dto/booking-filter.dto';
+import { parsePage, parseLimit } from '../../utils/common/dto/pagination.dto';
 
 interface SeatDef {
   seatNumber: string;
@@ -52,7 +54,11 @@ function addMinutes(time: string, minutes: number): string {
   return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
-const TAKEN_STATUSES = [BookingStatus.PENDING_PAYMENT, BookingStatus.CONFIRMED, BookingStatus.BOARDED];
+const TAKEN_STATUSES = [
+  BookingStatus.PENDING_PAYMENT,
+  BookingStatus.CONFIRMED,
+  BookingStatus.BOARDED,
+];
 
 @Injectable()
 export class BookingService {
@@ -232,7 +238,12 @@ export class BookingService {
             discountAmount,
           }),
         );
-        await qr.manager.increment(Coupon, { id: appliedCoupon.id }, 'usedCount', 1);
+        await qr.manager.increment(
+          Coupon,
+          { id: appliedCoupon.id },
+          'usedCount',
+          1,
+        );
       }
 
       await qr.commitTransaction();
@@ -289,7 +300,12 @@ export class BookingService {
       }
 
       if (booking.coupon) {
-        await qr.manager.decrement(Coupon, { id: booking.coupon.id }, 'usedCount', 1);
+        await qr.manager.decrement(
+          Coupon,
+          { id: booking.coupon.id },
+          'usedCount',
+          1,
+        );
       }
 
       await qr.commitTransaction();
@@ -306,8 +322,11 @@ export class BookingService {
 
   async list(
     customerId: string,
-    filters: { status?: BookingStatus; upcoming?: boolean },
-  ): Promise<BookingDto[]> {
+    filters: BookingFilterDto = {},
+  ): Promise<{ items: BookingDto[]; total: number }> {
+    const page = parsePage(filters.page);
+    const limit = parseLimit(filters.limit);
+
     const qb = this.bookingRepo
       .createQueryBuilder('b')
       .innerJoin('b.customer', 'customer')
@@ -319,12 +338,17 @@ export class BookingService {
     if (filters.status) {
       qb.andWhere('b.status = :status', { status: filters.status });
     }
-    if (filters.upcoming) {
+    if (filters.upcoming === 'true') {
       qb.andWhere('b.tripDate >= CURRENT_DATE');
     }
 
-    const bookings = await qb.getMany();
-    return bookings.map((b) => this.toDto(b));
+    const total = await qb.getCount();
+    const bookings = await qb
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getMany();
+
+    return { items: bookings.map((b) => this.toDto(b)), total };
   }
 
   async getTicket(bookingId: string, customerId: string): Promise<TicketDto> {
@@ -372,7 +396,7 @@ export class BookingService {
       status: booking.status,
       customerName: customer
         ? `${customer.firstName} ${customer.lastName}`
-        : booking.passengerName ?? 'Walk-in Passenger',
+        : (booking.passengerName ?? 'Walk-in Passenger'),
       origin: route.origin,
       destination: route.destination,
       viaStops: (route.stops ?? [])
@@ -396,34 +420,57 @@ export class BookingService {
     };
   }
 
-  async createCashBooking(conductorUserId: string, dto: CreateCashBookingDto): Promise<BookingDto> {
+  async createCashBooking(
+    conductorUserId: string,
+    dto: CreateCashBookingDto,
+  ): Promise<BookingDto> {
     const schedule = await this.scheduleRepo
       .createQueryBuilder('s')
       .innerJoinAndSelect('s.bus', 'bus')
       .where('s.id = :scheduleId', { scheduleId: dto.scheduleId })
       .getOne();
-    if (!schedule) throw new AppError('Schedule not found', HttpStatus.NOT_FOUND);
-    if (!schedule.isActive) throw new AppError('Schedule is not active', HttpStatus.UNPROCESSABLE_ENTITY);
+    if (!schedule)
+      throw new AppError('Schedule not found', HttpStatus.NOT_FOUND);
+    if (!schedule.isActive)
+      throw new AppError(
+        'Schedule is not active',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
 
     const conductor = await this.conductorRepo.findOne({
       where: { user: { id: conductorUserId } },
     });
-    if (!conductor) throw new AppError('Conductor profile not found', HttpStatus.FORBIDDEN);
+    if (!conductor)
+      throw new AppError('Conductor profile not found', HttpStatus.FORBIDDEN);
 
     const assignment = await this.assignmentRepo.findOne({
-      where: { bus: { id: schedule.bus.id }, conductor: { id: conductor.id }, isActive: true },
+      where: {
+        bus: { id: schedule.bus.id },
+        conductor: { id: conductor.id },
+        isActive: true,
+      },
     });
-    if (!assignment) throw new AppError('Conductor is not assigned to this bus', HttpStatus.FORBIDDEN);
+    if (!assignment)
+      throw new AppError(
+        'Conductor is not assigned to this bus',
+        HttpStatus.FORBIDDEN,
+      );
 
     if (!dto.seatNumbers.length) {
-      throw new AppError('At least one seat must be selected', HttpStatus.BAD_REQUEST);
+      throw new AppError(
+        'At least one seat must be selected',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const layout = schedule.bus.seatLayoutJson as SeatLayout;
     const validSeats = new Set(buildSeatDefs(layout).map((s) => s.seatNumber));
     for (const seat of dto.seatNumbers) {
       if (!validSeats.has(seat)) {
-        throw new AppError(`Invalid seat number: ${seat}`, HttpStatus.BAD_REQUEST);
+        throw new AppError(
+          `Invalid seat number: ${seat}`,
+          HttpStatus.BAD_REQUEST,
+        );
       }
     }
 
@@ -474,7 +521,10 @@ export class BookingService {
       await qr.rollbackTransaction();
       const pgErr = err as { code?: string };
       if (pgErr.code === '23505') {
-        throw new AppError('One or more seats are already booked for this trip', HttpStatus.CONFLICT);
+        throw new AppError(
+          'One or more seats are already booked for this trip',
+          HttpStatus.CONFLICT,
+        );
       }
       throw err;
     } finally {
@@ -520,7 +570,10 @@ export class BookingService {
     return this.toDto(saved);
   }
 
-  async verifyTicket(token: string, conductorUserId: string): Promise<BookingDto> {
+  async verifyTicket(
+    token: string,
+    conductorUserId: string,
+  ): Promise<BookingDto> {
     const conductor = await this.conductorRepo.findOne({
       where: { user: { id: conductorUserId } },
     });
@@ -543,12 +596,18 @@ export class BookingService {
       throw new AppError('Ticket has been cancelled', HttpStatus.GONE);
     }
     if (booking.status !== BookingStatus.CONFIRMED) {
-      throw new AppError('Ticket is not yet confirmed (payment pending)', HttpStatus.UNPROCESSABLE_ENTITY);
+      throw new AppError(
+        'Ticket is not yet confirmed (payment pending)',
+        HttpStatus.UNPROCESSABLE_ENTITY,
+      );
     }
 
     const today = new Date().toISOString().slice(0, 10);
     if (booking.tripDate < today) {
-      throw new AppError('Ticket has expired (trip date has passed)', HttpStatus.GONE);
+      throw new AppError(
+        'Ticket has expired (trip date has passed)',
+        HttpStatus.GONE,
+      );
     }
 
     const assignment = await this.assignmentRepo.findOne({
@@ -559,7 +618,10 @@ export class BookingService {
       },
     });
     if (!assignment) {
-      throw new AppError('Conductor is not assigned to this bus', HttpStatus.FORBIDDEN);
+      throw new AppError(
+        'Conductor is not assigned to this bus',
+        HttpStatus.FORBIDDEN,
+      );
     }
 
     const qr = this.dataSource.createQueryRunner();
@@ -577,7 +639,10 @@ export class BookingService {
         .execute();
 
       if (updated.affected === 0) {
-        throw new AppError('Ticket was already scanned by another conductor', HttpStatus.CONFLICT);
+        throw new AppError(
+          'Ticket was already scanned by another conductor',
+          HttpStatus.CONFLICT,
+        );
       }
 
       await qr.commitTransaction();

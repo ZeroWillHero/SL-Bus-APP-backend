@@ -24,7 +24,8 @@ async function bootstrap() {
 
   const apiVersion = process.env.npm_package_version ?? '1.0.0';
   const localServerUrl =
-    process.env.SWAGGER_LOCAL_URL ?? `http://localhost:${process.env.PORT ?? 4000}`;
+    process.env.SWAGGER_LOCAL_URL ??
+    `http://localhost:${process.env.PORT ?? 4000}`;
   const productionServerUrl =
     process.env.SWAGGER_PROD_URL ?? 'https://api.codescapelabs.com';
 
