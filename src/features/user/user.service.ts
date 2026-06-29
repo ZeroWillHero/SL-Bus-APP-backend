@@ -66,7 +66,10 @@ export class UserService {
   }
 
   async getById(id: string): Promise<UserDTO> {
-    const user = await this.userRepository.findOne({ where: { id } });
+    const user = await this.userRepository.findOne({
+      where: { id },
+      relations: ['userRoles', 'userRoles.role', 'conductor', 'customer', 'busOwner'],
+    });
 
     if (!user) {
       throw new AppError('User not found', HttpStatus.NOT_FOUND);
@@ -176,7 +179,40 @@ export class UserService {
           ?.map((ur) => ur.role.name)
           .filter((n): n is string => !!n) ?? [],
       profilePicture: user.profilePicture,
-      conductor: user.conductor,
+      conductor: user.conductor
+        ? {
+            id: user.conductor.id,
+            firstName: user.conductor.firstName,
+            lastName: user.conductor.lastName,
+            licenseNumber: user.conductor.licenseNumber,
+            licenseExpiryDate: user.conductor.licenseExpiryDate,
+            licenseDoc: user.conductor.licenseDoc,
+            contactNumber: user.conductor.contactNumber,
+            isLicenseVerified: user.conductor.isLicenseVerified,
+          }
+        : null,
+      customer: user.customer
+        ? {
+            id: user.customer.id,
+            firstName: user.customer.firstName,
+            lastName: user.customer.lastName,
+            contactNumber: user.customer.contactNumber,
+            address: user.customer.address,
+          }
+        : null,
+      busOwner: user.busOwner
+        ? {
+            id: user.busOwner.id,
+            firstName: user.busOwner.firstName,
+            lastName: user.busOwner.lastName,
+            contactNumber: user.busOwner.contactNumber,
+            nicNumber: user.busOwner.nicNumber,
+            address: user.busOwner.address,
+            approvalStatus: user.busOwner.approvalStatus,
+            rejectionReason: user.busOwner.rejectionReason,
+            nicDocPath: user.busOwner.nicDocPath,
+          }
+        : null,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
@@ -193,7 +229,6 @@ export class UserService {
       profilePicture: dto.profilePicture ?? null,
       createdAt: dto.createdAt,
       updatedAt: dto.updatedAt,
-      conductor: dto.conductor,
     };
   }
 }

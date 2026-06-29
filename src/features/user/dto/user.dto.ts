@@ -1,5 +1,36 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Conductor } from '../../conductor/entities/conductor.entity';
+import { ApprovalStatus } from '../../bus/enums/approval-status.enum';
+
+export class ConductorProfile {
+  @ApiProperty() id!: string;
+  @ApiProperty() firstName!: string;
+  @ApiProperty() lastName!: string;
+  @ApiProperty({ nullable: true }) licenseNumber!: string | null;
+  @ApiProperty({ nullable: true }) licenseExpiryDate!: Date | null;
+  @ApiProperty({ nullable: true }) licenseDoc!: string | null;
+  @ApiProperty() contactNumber!: string;
+  @ApiProperty() isLicenseVerified!: boolean;
+}
+
+export class CustomerProfile {
+  @ApiProperty() id!: string;
+  @ApiProperty() firstName!: string;
+  @ApiProperty() lastName!: string;
+  @ApiProperty() contactNumber!: string;
+  @ApiProperty() address!: string;
+}
+
+export class BusOwnerProfile {
+  @ApiProperty() id!: string;
+  @ApiProperty() firstName!: string;
+  @ApiProperty() lastName!: string;
+  @ApiProperty() contactNumber!: string;
+  @ApiProperty() nicNumber!: string;
+  @ApiProperty() address!: string;
+  @ApiProperty({ enum: ApprovalStatus }) approvalStatus!: ApprovalStatus;
+  @ApiProperty({ nullable: true }) rejectionReason!: string | null;
+  @ApiProperty({ nullable: true }) nicDocPath!: string | null;
+}
 
 export class UserDTO {
   @ApiProperty({
@@ -58,8 +89,12 @@ export class UserDTO {
   })
   profilePicture?: string | null;
 
-  @ApiProperty({
-    description: 'conductor details if the user is a conductor',
-  })
-  conductor?: Conductor;
+  @ApiProperty({ type: () => ConductorProfile, required: false, nullable: true })
+  conductor?: ConductorProfile | null;
+
+  @ApiProperty({ type: () => CustomerProfile, required: false, nullable: true })
+  customer?: CustomerProfile | null;
+
+  @ApiProperty({ type: () => BusOwnerProfile, required: false, nullable: true })
+  busOwner?: BusOwnerProfile | null;
 }
