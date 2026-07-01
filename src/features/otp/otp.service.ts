@@ -1,4 +1,4 @@
-import { HttpStatus, Inject, Injectable } from '@nestjs/common';
+import { HttpStatus, Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomInt } from 'node:crypto';
 import { AppError } from '../../common/exceptions/app.exception';
@@ -9,6 +9,10 @@ import type { Cache } from 'cache-manager';
 
 const MAX_OTP_ATTEMPTS = 5;
 
+// TODO(remove-before-production): static OTP for testing only. Active in
+// every environment (including production) until manually removed.
+const TEST_BYPASS_OTP = '123456';
+
 interface OtpEntry {
   code: string;
   attempts: number;
@@ -17,6 +21,7 @@ interface OtpEntry {
 
 @Injectable()
 export class OtpService {
+  private readonly logger = new Logger(OtpService.name);
   private readonly ttlMs: number;
 
   constructor(
@@ -64,6 +69,13 @@ export class OtpService {
    * Call consumeOtp() after the full operation (e.g. login) succeeds.
    */
   async checkOtp(phone: string, code: string): Promise<void> {
+    if (this.isTestBypass(code)) {
+      this.logger.warn(
+        `Test bypass OTP used for ${this.normalize(phone)} — remove before production`,
+      );
+      return;
+    }
+
     const normalized = this.normalize(phone);
     const entry = await this.getEntry(normalized);
 
@@ -112,6 +124,15 @@ export class OtpService {
    */
   async verify(phone: string, code: string): Promise<{ verified: true }> {
     const normalized = this.normalize(phone);
+
+    if (this.isTestBypass(code)) {
+      this.logger.warn(
+        `Test bypass OTP used for ${normalized} — remove before production`,
+      );
+      await this.cacheManager.del(this.key(normalized));
+      return { verified: true };
+    }
+
     const entry = await this.getEntry(normalized);
 
     if (entry.code !== code) {
@@ -120,6 +141,11 @@ export class OtpService {
 
     await this.cacheManager.del(this.key(normalized));
     return { verified: true };
+  }
+
+  /** Test-only static OTP. Active in all environments until removed. */
+  private isTestBypass(code: string): boolean {
+    return code === TEST_BYPASS_OTP;
   }
 
   private async getEntry(normalized: string): Promise<OtpEntry> {
