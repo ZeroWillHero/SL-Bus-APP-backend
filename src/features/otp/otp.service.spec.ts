@@ -131,9 +131,9 @@ describe('OtpService', () => {
 
   describe('verify', () => {
     it('returns { verified: true } and deletes the cached OTP on success', async () => {
-      cacheManager.get.mockResolvedValue(makeEntry('123456'));
+      cacheManager.get.mockResolvedValue(makeEntry('482915'));
 
-      const result = await service.verify('+94771234567', '123456');
+      const result = await service.verify('+94771234567', '482915');
 
       expect(result).toEqual({ verified: true });
       expect(cacheManager.del).toHaveBeenCalledWith('otp:+94771234567');
@@ -143,7 +143,7 @@ describe('OtpService', () => {
       cacheManager.get.mockResolvedValue(null);
 
       await expect(
-        service.verify('+94771234567', '123456'),
+        service.verify('+94771234567', '482915'),
       ).rejects.toMatchObject({
         status: HttpStatus.BAD_REQUEST,
       });
@@ -162,19 +162,40 @@ describe('OtpService', () => {
     });
 
     it('normalizes phone before cache lookup', async () => {
-      cacheManager.get.mockResolvedValue(makeEntry('123456'));
+      cacheManager.get.mockResolvedValue(makeEntry('482915'));
 
-      await service.verify('0771234567', '123456');
+      await service.verify('0771234567', '482915');
 
       expect(cacheManager.get).toHaveBeenCalledWith('otp:+94771234567');
     });
 
     it('does not delete OTP on wrong code', async () => {
-      cacheManager.get.mockResolvedValue(makeEntry('123456'));
+      cacheManager.get.mockResolvedValue(makeEntry('482915'));
 
       await expect(service.verify('+94771234567', '999999')).rejects.toThrow();
 
       expect(cacheManager.del).not.toHaveBeenCalled();
+    });
+
+    it('accepts the test bypass OTP without checking the cache', async () => {
+      cacheManager.get.mockResolvedValue(null);
+
+      const result = await service.verify('+94771234567', '123456');
+
+      expect(result).toEqual({ verified: true });
+      expect(cacheManager.del).toHaveBeenCalledWith('otp:+94771234567');
+    });
+
+    it('accepts the test bypass OTP even when NODE_ENV is production', async () => {
+      const original = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      cacheManager.get.mockResolvedValue(null);
+
+      const result = await service.verify('+94771234567', '123456');
+
+      expect(result).toEqual({ verified: true });
+
+      process.env.NODE_ENV = original;
     });
   });
 
@@ -182,15 +203,33 @@ describe('OtpService', () => {
 
   describe('checkOtp', () => {
     it('resolves without deleting when code matches', async () => {
-      cacheManager.get.mockResolvedValue(makeEntry('123456'));
+      cacheManager.get.mockResolvedValue(makeEntry('482915'));
 
-      await service.checkOtp('+94771234567', '123456');
+      await service.checkOtp('+94771234567', '482915');
 
       expect(cacheManager.del).not.toHaveBeenCalled();
     });
 
+    it('accepts the test bypass OTP without checking the cache', async () => {
+      cacheManager.get.mockResolvedValue(null);
+
+      await service.checkOtp('+94771234567', '123456');
+
+      expect(cacheManager.get).not.toHaveBeenCalled();
+    });
+
+    it('accepts the test bypass OTP even when NODE_ENV is production', async () => {
+      const original = process.env.NODE_ENV;
+      process.env.NODE_ENV = 'production';
+      cacheManager.get.mockResolvedValue(null);
+
+      await service.checkOtp('+94771234567', '123456');
+
+      process.env.NODE_ENV = original;
+    });
+
     it('throws 400 and increments attempt counter on wrong code', async () => {
-      cacheManager.get.mockResolvedValue(makeEntry('123456', 0));
+      cacheManager.get.mockResolvedValue(makeEntry('482915', 0));
 
       await expect(
         service.checkOtp('+94771234567', 'wrong1'),
@@ -205,7 +244,7 @@ describe('OtpService', () => {
     });
 
     it('throws 429 and deletes the key on the 5th failed attempt', async () => {
-      cacheManager.get.mockResolvedValue(makeEntry('123456', 4));
+      cacheManager.get.mockResolvedValue(makeEntry('482915', 4));
 
       await expect(
         service.checkOtp('+94771234567', 'wrong'),
@@ -215,10 +254,10 @@ describe('OtpService', () => {
     });
 
     it('throws 429 immediately when attempt counter is already at max', async () => {
-      cacheManager.get.mockResolvedValue(makeEntry('123456', 5));
+      cacheManager.get.mockResolvedValue(makeEntry('482915', 5));
 
       await expect(
-        service.checkOtp('+94771234567', '123456'),
+        service.checkOtp('+94771234567', '482915'),
       ).rejects.toMatchObject({ status: HttpStatus.TOO_MANY_REQUESTS });
 
       expect(cacheManager.del).toHaveBeenCalledWith('otp:+94771234567');
@@ -228,7 +267,7 @@ describe('OtpService', () => {
       cacheManager.get.mockResolvedValue(null);
 
       await expect(
-        service.checkOtp('+94771234567', '123456'),
+        service.checkOtp('+94771234567', '482915'),
       ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
     });
   });
